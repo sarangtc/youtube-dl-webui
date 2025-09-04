@@ -9,5 +9,7 @@
         "port": 5000
     },
     "youtube_dl": {
+        "format": "bestvideo[ext=mp4][height<=?1080][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "outtmpl": "%(title)s.%(ext)s"  
     }
 }

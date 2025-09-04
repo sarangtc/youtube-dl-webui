@@ -1,4 +1,4 @@
-# youtube-dl-webui
+# yt-dlp-webui
 
 ---
 
@@ -19,7 +19,7 @@ Visit [GitHub](https://github.com/d0u9/youtube-dl-webui) for more details.
 2. From DockerFile
 
         cd /tmp
-        docker build -f </path/to/Dockerfile> -t youtube-dl-webui .
+        docker build -f </path/to/Dockerfile> -t yt-dlp-webui .
 
 ## Usage
 
@@ -43,7 +43,7 @@ Visit [GitHub](https://github.com/d0u9/youtube-dl-webui) for more details.
     with the contents below:
 
         [Unit]
-        Description=youtube-dl downloader
+        Description=yt-dlp downloader
         Requires=docker.service
         After=docker.service
 
@@ -57,7 +57,7 @@ Visit [GitHub](https://github.com/d0u9/youtube-dl-webui) for more details.
 
 ## Default configurations
 
-All defualt settings can be found in [this json file](https://github.com/d0u9/docker/blob/master/dockerfiles/youtube-dl-webui/default_config.json).
+All default settings can be found in [this json file](https://github.com/d0u9/docker/blob/master/dockerfiles/youtube-dl-webui/default_config.json).
 
 - Files save to: `/tmp/youtube_dl`;
 - Database file location: `/tmp/youtube_dl_webui.db`;

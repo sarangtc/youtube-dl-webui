@@ -5,8 +5,8 @@ import re
 import logging
 import json
 
-from youtube_dl import YoutubeDL
-from youtube_dl import DownloadError
+from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
 
 from multiprocessing import Process
 from time import time

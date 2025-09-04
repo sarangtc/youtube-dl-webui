@@ -62,7 +62,7 @@ class TaskExistenceError(TaskError):
 
 
 class YDLManagerError(YoutubeDLWebUI):
-    """Error related to youtube-dl manager."""
+    """Error related to yt-dlp manager."""
     def __init__(self, msg, tid=None, url=None, state=None):
         if tid:
             msg += ' tid={}'.format(tid)

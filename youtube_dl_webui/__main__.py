@@ -20,11 +20,5 @@ else:
 import youtube_dl_webui
 
 if __name__ == '__main__':
-    # Setup logger
-    logging_json = os.path.join(dirname, 'logging.json')
-    with open(logging_json) as f:
-        logging_conf = json.load(f)
-    logging.config.dictConfig(logging_conf)
-
     youtube_dl_webui.main()
 

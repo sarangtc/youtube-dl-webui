@@ -3,8 +3,8 @@
 
 from setuptools import setup
 
-DESCRIPTION = 'webui for youtube-dl'
-LONG_DESCRIPTION = 'Another webui for youtube-dl, powered by youtube-dl'
+DESCRIPTION = 'webui for yt-dlp'
+LONG_DESCRIPTION = 'Another webui for yt-dlp, powered by yt-dlp'
 
 setup (
         name='youtube_dl_webui',
@@ -18,8 +18,8 @@ setup (
         include_package_data=True,
         zip_safe=False,
         install_requires=[
-            'Flask>=0.2',
-            'youtube-dl',
+            'Flask>=1.1',
+            'yt-dlp>=2024.3.10',
         ],
         entry_points={
             'console_scripts': [
