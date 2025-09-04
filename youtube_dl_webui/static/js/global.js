@@ -19,8 +19,8 @@ var videoDownload = (function (Vue, extendAM){
         },
         formatPresets: [
             { label: 'Use preferences format', value: '__PREFERENCES__' },
-            { label: 'Best Quality (Video + Audio)', value: 'best' },
-            { label: '1080p MP4', value: 'bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4]/best' },
+            { label: 'Best Quality', value: 'best' },
+            { label: 'Best Quality MP4', value: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best' },
             { label: '1080p MP4 H.264 preferred', value: 'bestvideo[ext=mp4][height<=?1080][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4]/best' },
             { label: '1080p MP4 H.265 preferred', value: 'bestvideo[ext=mp4][height<=?1080][vcodec^=hevc]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080][vcodec^=hvc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4]/best' },
             { label: '720p MP4', value: 'best[height<=720][ext=mp4]/best[height<=720]/best' },

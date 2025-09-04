@@ -133,14 +133,6 @@ def download_file(tid):
     if not filename:
         return json.dumps({'status': 'error', 'errmsg': 'File not found'})
     
-    # Handle Unicode escape sequences in filename (e.g., \uff1a -> :)
-    try:
-        # Decode Unicode escape sequences
-        decoded_filename = filename.encode('utf-8').decode('unicode_escape')
-    except (UnicodeDecodeError, UnicodeEncodeError):
-        # If decoding fails, use original filename
-        decoded_filename = filename
-    
     # Get the download directory from configuration
     config_payload = {'act': 'get'}
     MSG.put('config', config_payload)
@@ -153,7 +145,7 @@ def download_file(tid):
     
     # Construct the full file path by combining download directory with filename
     # The database stores just the filename, but we need the full path
-    file_path = os.path.join(download_dir, decoded_filename)
+    file_path = os.path.join(download_dir, filename)
     
     # Check if file exists
     if not os.path.exists(file_path):
