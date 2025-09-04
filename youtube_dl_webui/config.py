@@ -63,6 +63,8 @@ class ydl_conf(conf_base):
 
         super(ydl_conf, self).__init__(self._valid_fields, conf_dict)
 
+
+
     def merge_conf(self, task_conf_dict={}):
         ret = deepcopy(self.dict())
         for key, val in task_conf_dict.items():

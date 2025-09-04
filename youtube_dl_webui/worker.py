@@ -3,13 +3,14 @@
 
 import re
 import logging
-import json
 
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError
 
 from multiprocessing import Process
 from time import time
+
+from .utils import sanitize_filename
 
 class YdlHook(object):
     def __init__(self, tid, msg_cli):
@@ -19,6 +20,32 @@ class YdlHook(object):
 
     def finished(self, d):
         self.logger.debug('finished status')
+        self.logger.info(f'Download finished - Final filename: {d.get("filename", "None")}, Final tmpfilename: {d.get("tmpfilename", "None")}')
+        
+        # Ensure the final filename is the merged file, not intermediate audio/video files
+        if 'filename' in d and d['filename']:
+            # Check if this is an intermediate file (contains format code like .f140.m4a)
+            if '.f' in d['filename'] and d['filename'].endswith(('.m4a', '.mp4')):
+                # This is an intermediate file, we need to construct the final merged filename
+                # Extract the base name without the format code
+                base_name = d['filename'].split('.f')[0]
+                final_filename = f"{base_name}.mp4"
+                self.logger.info(f'Intermediate file detected, using final filename: {final_filename}')
+                self.logger.info(f'Original intermediate filename: {d["filename"]}')
+                d['filename'] = final_filename
+            else:
+                self.logger.info(f'Final file detected (not intermediate): {d["filename"]}')
+        
+        # Ensure the final filename is properly sanitized
+        if 'filename' in d and d['filename']:
+            original_filename = d['filename']
+            d['filename'] = sanitize_filename(d['filename'])
+            if original_filename != d['filename']:
+                self.logger.info(f'Final filename sanitized: "{original_filename}" -> "{d["filename"]}"')
+        
+        # Log the final filename that will be stored in the database
+        self.logger.info(f'Final filename to be stored in database: {d.get("filename", "None")}')
+        
         d['_percent_str'] = '100%'
         d['speed'] = '0'
         d['elapsed'] = 0
@@ -119,6 +146,27 @@ class Worker(Process):
                         info_dict['description'] = info_dict['description'].replace('\n', '<br />');
                     payload = {'tid': self.tid, 'data': info_dict}
                     self.msg_cli.put('info_dict', payload)
+
+                # Prefetch the title and sanitize the filename before download
+                if 'outtmpl' in self.ydl_opts and '%(title)s' in self.ydl_opts['outtmpl']:
+                    # Extract info to get the title
+                    info_dict = ydl.extract_info(self.url, download=False)
+                    title = info_dict.get('title', 'video')
+                    
+                    # Create a completely sanitized filename template
+                    sanitized_title = sanitize_filename(title)
+                    # Create a custom filename without any template variables
+                    custom_filename = f"{sanitized_title}.%(ext)s"
+                    # Update the options with the custom filename
+                    self.ydl_opts['outtmpl'] = custom_filename
+                    
+                    self.logger.info(f'Original title: {title}')
+                    self.logger.info(f'Original outtmpl: {self.ydl_opts.get("outtmpl", "None")}')
+                    self.logger.info(f'Custom filename template: {custom_filename}')
+                    self.logger.info(f'Updated ydl_opts outtmpl: {self.ydl_opts["outtmpl"]}')
+                    
+                    # Re-apply the progress hooks to ensure they use the updated options
+                    ydl.opts.update(self.ydl_opts)
 
                 self.logger.info('start downloading, url - %s' %(self.url))
                 ydl.download([self.url])
