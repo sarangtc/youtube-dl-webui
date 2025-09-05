@@ -52,7 +52,12 @@
                     <button @click="resumeTask" v-if="videoList[currentSelected] && videoList[currentSelected].state !== 'finished'"><i class="fa fa-play" aria-hidden="true"></i> Resume</button>
                     <button v-if="videoList[currentSelected] && videoList[currentSelected].state === 'finished'" @click="downloadFile"><i class="fa fa-download" aria-hidden="true"></i> Download</button>
                     <button @click="preference"><i class="fa fa-cog" aria-hidden="true"></i> Preference</button>
-                    <button @click="about" style="float:right"><i class="fa fa-question-circle" aria-hidden="true"></i> About</button>
+                </div>
+                <div class="header-title">
+                    <h1>yt-dlp-webUI</h1>
+                </div>
+                <div class="header-right">
+                    <button @click="about"><i class="fa fa-question-circle" aria-hidden="true"></i> About</button>
                 </div>
             </header>
             <div class="main-body">
@@ -93,7 +98,7 @@
                         <tbody>
                             <tr v-for="(video, index) in videoList" @click="selected(index)" :class="{'selected': currentSelected === index}">
                                 <td v-cloak>{{"{{index + 1}}"}}</td>
-                                <td v-clock style="font-size: 16px">
+                                <td v-cloak style="font-size: 16px">
                                     <i v-bind:style="{color: stateIcon(video.state).color}" v-bind:class="['fa', stateIcon(video.state).icon]" aria-hidden="true"></i>
                                 </td>
                                 <td>{{"{{video.title}}"}}</td>
@@ -129,19 +134,22 @@
                         <div>
                             <label>Log Size:</label><input type="text" ref="log-size" v-model="modalData.preference.general.log_size" v-cloak @keyup.esc="showModal = false"/>
                         </div>
+                        <div>
+                            <label>About Custom HTML:</label><textarea ref="about-custom-html" v-model="modalData.preference.general.about_custom_html" v-cloak @keyup.esc="showModal = false" placeholder="Enter custom HTML to display in the About modal..." style="width: 100%; height: 80px; resize: vertical;"></textarea>
+                        </div>
                         <div style="text-align:center;">
                             <hr class="left-hr" /><span style="font-weight: bold;">yt-dlp options</span><hr class="right-hr" />
                         </div>
                         <div>
                             <label>Format:</label>
                             <div style="display: flex; gap: 10px; align-items: center;">
-                                <select @change="selectFormatPreset($event.target.value, 'preference')" style="flex: 1;">
+                                <select @change="selectFormatPreset($event.target.value, 'preference')" :value="getSelectedFormatPreset('preference')" style="flex: 1;">
                                     <option value="">Select a preset...</option>
-                                    <option v-for="preset in formatPresets" :key="preset.value" :value="preset.value">{{"{{preset.label}}"}}</option>
+                                    <option v-for="preset in getFormatPresets('preference')" :key="preset.value" :value="preset.value">{{"{{preset.label}}"}}</option>
                                 </select>
                                 <button @click="clearFormat('preference')" style="padding: 5px 10px; font-size: 12px;">Clear</button>
                             </div>
-                            <input type="text" ref="format" v-model="modalData.preference.youtube_dl.format" v-cloak @keyup.esc="showModal = false" placeholder="Or type custom format..." style="margin-top: 5px;"/>
+                            <input type="text" ref="format" v-model="modalData.preference.youtube_dl.format" v-cloak @keyup.esc="showModal = false" @blur="onFormatInputBlur('preference')" placeholder="Or type custom format..." style="margin-top: 5px;"/>
                         </div>
                         <div>
                             <label>Proxy:</label><input type="text" ref="proxy" v-model="modalData.preference.youtube_dl.proxy" v-cloak @keyup.esc="showModal = false"/>
@@ -150,7 +158,7 @@
                             <label>Out Tmpl:</label><input type="text" ref="outtmpl" v-model="modalData.preference.youtube_dl.outtmpl" v-cloak @keyup.esc="showModal = false"/>
                         </div>
                         <div>
-                            <label>Rate Limit:</label><input type="text" ref="ratelimit" v-model="modalData.preference.youtube_dl.ratelimit" v-cloak @keyup.esc="showModal = false"/>
+                            <label>Rate Limit (bytes/s):</label><input type="text" ref="ratelimit" v-model="modalData.preference.youtube_dl.ratelimit" v-cloak @keyup.esc="showModal = false"/>
                         </div>
                     </div>
                     <div slot="footer">
@@ -170,6 +178,7 @@
                         <div style="justify-content: left;">
                             <span class="caption">License:</span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html">GPL-2.0</a>
                         </div>
+                        <div v-if="aboutCustomHtml" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #d8dde6;" v-html="aboutCustomHtml"></div>
                     </div>
                     <div slot="footer">
                         <button class="modal-default-button" @click="showModal = false">OK</button>
@@ -198,13 +207,13 @@
                         <div>
                             <label>Format:</label>
                             <div style="display: flex; gap: 10px; align-items: center;">
-                                <select @change="selectFormatPreset($event.target.value, 'add')" style="flex: 1;">
+                                <select @change="selectFormatPreset($event.target.value, 'add')" :value="getSelectedFormatPreset('add')" style="flex: 1;">
                                     <option value="">Select a preset...</option>
-                                    <option v-for="preset in formatPresets" :key="preset.value" :value="preset.value">{{"{{preset.label}}"}}</option>
+                                    <option v-for="preset in getFormatPresets('add')" :key="preset.value" :value="preset.value">{{"{{preset.label}}"}}</option>
                                 </select>
                                 <button @click="clearFormat('add')" style="padding: 5px 10px; font-size: 12px;">Clear</button>
                             </div>
-                            <input type="text" ref="format" v-model="modalData.add.ydl_opts.format" v-cloak @keyup.esc="showModal = false" placeholder="Or type custom format..." style="margin-top: 5px;"/>
+                            <input type="text" ref="format" v-model="modalData.add.ydl_opts.format" v-cloak @keyup.esc="showModal = false" @blur="onFormatInputBlur('add')" placeholder="Or type custom format..." style="margin-top: 5px;"/>
                         </div>
                     </div>
                 </template>

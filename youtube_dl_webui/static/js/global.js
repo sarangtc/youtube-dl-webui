@@ -15,22 +15,10 @@ var videoDownload = (function (Vue, extendAM){
         modalData: {
             add: { url: '', ydl_opts: {} },
             remove: { removeFile: false },
-            preference: {youtube_dl: {format: '', proxy: '', ratelimit: '', outtmpl: ''}, general: {download_dir: '', db_path: '', log_size: ''}},
+            preference: {youtube_dl: {format: '', proxy: '', ratelimit: '', outtmpl: ''}, general: {download_dir: '', db_path: '', log_size: '', about_custom_html: ''}},
         },
-        formatPresets: [
-            { label: 'Use preferences format', value: '__PREFERENCES__' },
-            { label: 'Best Quality', value: 'best' },
-            { label: 'Best Quality MP4', value: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best' },
-            { label: '1080p MP4 H.264 preferred', value: 'bestvideo[ext=mp4][height<=?1080][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4]/best' },
-            { label: '1080p MP4 H.265 preferred', value: 'bestvideo[ext=mp4][height<=?1080][vcodec^=hevc]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080][vcodec^=hvc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4]/best' },
-            { label: '720p MP4', value: 'best[height<=720][ext=mp4]/best[height<=720]/best' },
-            { label: '480p MP4', value: 'best[height<=480][ext=mp4]/best[height<=480]/best' },
-            { label: '360p MP4', value: 'best[height<=360][ext=mp4]/best[height<=360]/best' },
-            { label: 'Best Video Only', value: 'bestvideo[ext=mp4][height<=?1080]/bestvideo[ext=mp4]/bestvideo' },
-            { label: 'Best Audio Only', value: 'bestaudio[ext=m4a]/bestaudio' },
-            { label: 'Audio Only (MP3)', value: 'bestaudio[ext=mp3]/bestaudio' },
-            { label: 'Audio Only (M4A)', value: 'bestaudio[ext=m4a]/bestaudio' }
-        ],
+        aboutCustomHtml: '',
+        formatOptions: [],
         currentSelected: null,
         taskDetails: {},
         taskInfoUrl: null,
@@ -64,6 +52,8 @@ var videoDownload = (function (Vue, extendAM){
             methods: {
                 showAddTaskModal: function(){
                     this.modalData.add.url = '';
+                    this.modalData.add.ydl_opts.format = this.modalData.preference.youtube_dl.format || '';
+                    this.updateAddTaskFormatLabel();
                     this.showModal = true;
                     this.modalType = 'addTask';
                     console.log(this.modalData);
@@ -99,10 +89,19 @@ var videoDownload = (function (Vue, extendAM){
                             _self.modalData.preference.general.download_dir = config.general.download_dir;
                             _self.modalData.preference.general.db_path = config.general.db_path;
                             _self.modalData.preference.general.log_size = config.general.log_size;
+                            _self.modalData.preference.general.about_custom_html = config.general.about_custom_html || '';
                             _self.modalData.preference.youtube_dl.format = config.youtube_dl.format;
                             _self.modalData.preference.youtube_dl.proxy = config.youtube_dl.proxy;
                             _self.modalData.preference.youtube_dl.ratelimit = config.youtube_dl.ratelimit;
                             _self.modalData.preference.youtube_dl.outtmpl = config.youtube_dl.outtmpl;
+                            
+                            // Load custom HTML for about modal
+                            _self.aboutCustomHtml = config.general.about_custom_html || '';
+                            
+                            // Load format options from config
+                            if (config.format_options && config.format_options.format_options) {
+                                _self.formatOptions = config.format_options.format_options;
+                            }
                         }
                     });
                 },
@@ -154,6 +153,8 @@ var videoDownload = (function (Vue, extendAM){
                     Vue.http.post(url, data, {emulateJSON: false}).then(function(res){
                         var responseJSON = JSON.parse(res.data);
                         if (responseJSON.status === 'success') {
+                            // Update the aboutCustomHtml with the new value
+                            _self.aboutCustomHtml = _self.modalData.preference.general.about_custom_html || '';
                             _self.showAlertToast('Preferences saved successfully', 'success');
                             _self.showModal = false;
                         } else {
@@ -236,10 +237,19 @@ var videoDownload = (function (Vue, extendAM){
                             _self.modalData.preference.general.download_dir = config.general.download_dir;
                             _self.modalData.preference.general.db_path = config.general.db_path;
                             _self.modalData.preference.general.log_size = config.general.log_size;
+                            _self.modalData.preference.general.about_custom_html = config.general.about_custom_html || '';
                             _self.modalData.preference.youtube_dl.format = config.youtube_dl.format;
                             _self.modalData.preference.youtube_dl.proxy = config.youtube_dl.proxy;
                             _self.modalData.preference.youtube_dl.ratelimit = config.youtube_dl.ratelimit;
                             _self.modalData.preference.youtube_dl.outtmpl = config.youtube_dl.outtmpl;
+                            
+                            // Load format options from config
+                            if (config.format_options && config.format_options.format_options) {
+                                _self.formatOptions = config.format_options.format_options;
+                            }
+                            
+                            // Update add task format label after loading preferences
+                            _self.updateAddTaskFormatLabel();
                         }
                     });
                 },
@@ -351,14 +361,104 @@ var videoDownload = (function (Vue, extendAM){
                 },
                 selectFormatPreset: function(preset, target) {
                     if (target === 'preference') {
-                        this.modalData.preference.youtube_dl.format = preset;
+                        if (preset === '__CUSTOM__') {
+                            // Focus the format text input for custom format
+                            this.$nextTick(function() {
+                                if (this.$refs.format) {
+                                    this.$refs.format.focus();
+                                }
+                            });
+                            return;
+                        } else {
+                            this.modalData.preference.youtube_dl.format = preset;
+                        }
                     } else if (target === 'add') {
                         if (preset === '__PREFERENCES__') {
                             // Use the format from preferences
                             this.modalData.add.ydl_opts.format = this.modalData.preference.youtube_dl.format || '';
+                        } else if (preset === '__CUSTOM__') {
+                            // Focus the format text input for custom format
+                            this.$nextTick(function() {
+                                if (this.$refs.format) {
+                                    this.$refs.format.focus();
+                                }
+                            });
+                            return;
                         } else {
                             this.modalData.add.ydl_opts.format = preset;
                         }
+                    }
+                },
+                getFormatPresets: function(target) {
+                    var baseOptions = this.formatOptions || [];
+                    if (target === 'preference') {
+                        return baseOptions;
+                    } else if (target === 'add') {
+                        // Add "Use preferences format" option at the beginning for add task modal
+                        var preferencesFormat = this.modalData.preference.youtube_dl.format;
+                        var label = 'Use preferences format';
+                        
+                        if (preferencesFormat && preferencesFormat.trim() !== '') {
+                            // Check if preferences format matches any preset
+                            var isCustom = true;
+                            for (var j = 0; j < baseOptions.length; j++) {
+                                if (baseOptions[j].value === preferencesFormat) {
+                                    label = 'Use preferences format (' + baseOptions[j].label + ')';
+                                    isCustom = false;
+                                    break;
+                                }
+                            }
+                            if (isCustom) {
+                                label = 'Use preferences format (custom)';
+                            }
+                        }
+                        
+                        var addTaskOptions = [{ label: label, value: '__PREFERENCES__' }];
+                        return addTaskOptions.concat(baseOptions);
+                    }
+                    return [];
+                },
+                getSelectedFormatPreset: function(target) {
+                    var currentFormat = '';
+                    var presets = this.getFormatPresets(target);
+                    
+                    if (target === 'preference') {
+                        currentFormat = this.modalData.preference.youtube_dl.format;
+                    } else if (target === 'add') {
+                        currentFormat = this.modalData.add.ydl_opts.format;
+                    }
+                    
+                    // Check if current format matches any preset
+                    for (var i = 0; i < presets.length; i++) {
+                        if (presets[i].value === currentFormat) {
+                            return presets[i].value;
+                        }
+                    }
+                    
+                    // If no match found and format is not empty, return custom
+                    if (currentFormat && currentFormat.trim() !== '') {
+                        return '__CUSTOM__';
+                    }
+                    
+                    return '';
+                },
+                updateAddTaskFormatLabel: function() {
+                    var preferencesFormat = this.modalData.preference.youtube_dl.format;
+                    
+                    if (preferencesFormat && preferencesFormat.trim() !== '') {
+                        // Check if preferences format matches any preset
+                        var isCustom = true;
+                        for (var j = 0; j < this.formatOptions.length; j++) {
+                            if (this.formatOptions[j].value === preferencesFormat) {
+                                // Update the label dynamically when getFormatPresets is called
+                                isCustom = false;
+                                break;
+                            }
+                        }
+                        // Store the custom status for use in getFormatPresets
+                        this.preferencesFormatIsCustom = isCustom;
+                    } else {
+                        this.preferencesFormatIsCustom = false;
                     }
                 },
                 clearFormat: function(target) {
@@ -367,6 +467,28 @@ var videoDownload = (function (Vue, extendAM){
                     } else if (target === 'add') {
                         this.modalData.add.ydl_opts.format = '';
                     }
+                },
+                onFormatInputBlur: function(target) {
+                    // Check if the current format matches any preset when input loses focus
+                    var currentFormat = '';
+                    var presets = this.getFormatPresets(target);
+                    
+                    if (target === 'preference') {
+                        currentFormat = this.modalData.preference.youtube_dl.format;
+                    } else if (target === 'add') {
+                        currentFormat = this.modalData.add.ydl_opts.format;
+                    }
+                    
+                    // Check if current format matches any preset
+                    for (var i = 0; i < presets.length; i++) {
+                        if (presets[i].value === currentFormat) {
+                            // Format matches a preset, no need to change dropdown
+                            return;
+                        }
+                    }
+                    
+                    // If no match found and format is not empty, the dropdown should show "Custom format"
+                    // This will be handled by the getSelectedFormatPreset function
                 }
             }
         });

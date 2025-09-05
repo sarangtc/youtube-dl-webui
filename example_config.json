@@ -2,7 +2,8 @@
     "general": {
         "download_dir": "/tmp/youtube_dl",
         "db_path": "/tmp/youtube_dl_webui.db",
-        "log_size": 10
+        "log_size": 10,
+        "about_custom_html": "<p>Custom information can be added here.</p><p>This supports <strong>HTML</strong> formatting!</p>"
     },
     "server": {
         "host": "0.0.0.0",
@@ -13,5 +14,19 @@
         "proxy": "socks5://127.0.0.1:1080",
         "ratelimit": 1097152,
         "outtmpl": "%(title)s.%(ext)s"        
-    }
+    },
+    "format_options": [
+        { "label": "Best Quality", "value": "best" },
+        { "label": "Best Quality MP4", "value": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" },
+        { "label": "1080p MP4 H.264 preferred", "value": "bestvideo[ext=mp4][height<=?1080][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4]/best" },
+        { "label": "1080p MP4 H.265 preferred", "value": "bestvideo[ext=mp4][height<=?1080][vcodec^=hevc]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080][vcodec^=hvc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4]/best" },
+        { "label": "720p MP4", "value": "best[height<=720][ext=mp4]/best[height<=720]/best" },
+        { "label": "480p MP4", "value": "best[height<=480][ext=mp4]/best[height<=480]/best" },
+        { "label": "360p MP4", "value": "best[height<=360][ext=mp4]/best[height<=360]/best" },
+        { "label": "Best Video Only", "value": "bestvideo[ext=mp4][height<=?1080]/bestvideo[ext=mp4]/bestvideo" },
+        { "label": "Best Audio Only", "value": "bestaudio[ext=m4a]/bestaudio" },
+        { "label": "Audio Only (MP3)", "value": "bestaudio[ext=mp3]/bestaudio" },
+        { "label": "Audio Only (M4A)", "value": "bestaudio[ext=m4a]/bestaudio" },
+        { "label": "Custom format", "value": "__CUSTOM__" }
+    ]
 }
