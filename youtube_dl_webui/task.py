@@ -20,7 +20,7 @@ from .worker import Worker
 
 class Task(object):
 
-    def __init__(self, tid, msg_cli, ydl_opts={}, info={}, status={}, log_size=10):
+    def __init__(self, tid, msg_cli, ydl_opts={}, info={}, status={}, log_size=10, download_dir=None):
         self.logger = logging.getLogger('ydl_webui')
         self.tid = tid
         self.ydl_opts = ydl_opts
@@ -33,6 +33,7 @@ class Task(object):
         self.state = None
         self.elapsed = status['elapsed']
         self.first_run = True if info['valid'] == 0 else False
+        self.download_dir = download_dir
 
         log_list = json.loads(status['log'])
         for log in log_list:
@@ -50,7 +51,8 @@ class Task(object):
         self.worker = Worker(self.tid, self.info['url'],
                              msg_cli=self.msg_cli,
                              ydl_opts=self.ydl_opts,
-                             first_run=self.first_run)
+                             first_run=self.first_run,
+                             download_dir=self.download_dir)
         self.log.appendleft({'time': int(tm), 'type': 'debug', 'msg': 'Task starts...'})
         self.worker.start()
 
@@ -151,7 +153,8 @@ class TaskManager(object):
                 raise TaskError('Task is finished')
 
             task = Task(tid, self._msg_cli, ydl_opts=ydl_opts, info=info,
-                        status=status, log_size=self._conf['general']['log_size'])
+                        status=status, log_size=self._conf['general']['log_size'],
+                        download_dir=self._conf['general']['download_dir'])
             self._tasks_dict[tid] = task
 
         task.start()

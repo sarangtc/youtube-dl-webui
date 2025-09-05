@@ -135,7 +135,7 @@
                             <label>Log Size:</label><input type="text" ref="log-size" v-model="modalData.preference.general.log_size" v-cloak @keyup.esc="showModal = false"/>
                         </div>
                         <div>
-                            <label>About Custom HTML:</label><textarea ref="about-custom-html" v-model="modalData.preference.general.about_custom_html" v-cloak @keyup.esc="showModal = false" placeholder="Enter custom HTML to display in the About modal..." style="width: 100%; height: 80px; resize: vertical;"></textarea>
+                            <label>About Custom HTML:</label><textarea ref="about-custom-html" v-model="modalData.preference.general.about_custom_html" v-cloak @keyup.esc="showModal = false" placeholder="Enter custom HTML to display in the About modal..."></textarea>
                         </div>
                         <div style="text-align:center;">
                             <hr class="left-hr" /><span style="font-weight: bold;">yt-dlp options</span><hr class="right-hr" />
@@ -202,7 +202,7 @@
                             <label>URL:</label><input type="text" ref="url" v-model="modalData.add.url" v-cloak @keyup.enter="addTask" @keyup.esc="showModal = false"/>
                         </div>
                         <div style="text-align:center;">
-                            <hr class="left-hr" /><span style="font-weight: bold;">youtube-dl options</span><hr class="right-hr" />
+                            <hr class="left-hr" /><span style="font-weight: bold;">yt-dlp options</span><hr class="right-hr" />
                         </div>
                         <div>
                             <label>Format:</label>

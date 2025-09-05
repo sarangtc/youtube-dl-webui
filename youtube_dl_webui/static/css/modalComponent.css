@@ -42,11 +42,12 @@
 
 .modal-body label {
     min-width: 80px;
-    max-width: 100px;
+    max-width: 80px;
 }
 
 .modal-body input,
-.modal-body select {
+.modal-body select,
+.modal-body textarea {
     font-size: 14px;
     display: block;
     width: 100%;
@@ -71,8 +72,15 @@
     padding-right: 36px;
 }
 
+.modal-body textarea {
+    min-height: 80px;
+    resize: vertical;
+    font-family: inherit;
+}
+
 .modal-body input:focus,
-.modal-body select:focus {
+.modal-body select:focus,
+.modal-body textarea:focus {
     outline: 0;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px var(--primary-50);
