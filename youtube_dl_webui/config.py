@@ -63,6 +63,8 @@ class ydl_conf(conf_base):
 
         super(ydl_conf, self).__init__(self._valid_fields, conf_dict)
 
+
+
     def merge_conf(self, task_conf_dict={}):
         ret = deepcopy(self.dict())
         for key, val in task_conf_dict.items():
@@ -92,6 +94,7 @@ class gen_conf(conf_base):
             ('download_dir',    '~/Downloads/youtube-dl',   'string',   '',                 expanduser),
             ('db_path',         '~/.conf/ydl_webui.db',     'string',   '',                 expanduser),
             ('log_size',        10,                         'int',      '',                 None),
+            ('about_custom_html', '',                       'string',   '',                 None),
         ]
 
     def __init__(self, conf_dict={}):
@@ -100,12 +103,27 @@ class gen_conf(conf_base):
         super(gen_conf, self).__init__(self._valid_fields, conf_dict)
 
 
+class format_options_conf(conf_base):
+    _valid_fields = [
+            #(key,              default_val,                type,       validate_regex,     call_function)
+            ('format_options',  [],                         'list',     None,               None),
+        ]
+
+    def __init__(self, conf_dict={}):
+        self.logger = logging.getLogger('ydl_webui')
+        # Handle the case where format_options is directly an array
+        if isinstance(conf_dict, list):
+            conf_dict = {'format_options': conf_dict}
+        super(format_options_conf, self).__init__(self._valid_fields, conf_dict)
+
+
 class conf(object):
-    _valid_fields = set(('youtube_dl', 'server', 'general'))
+    _valid_fields = set(('youtube_dl', 'server', 'general', 'format_options'))
 
     ydl_conf = None
     svr_conf = None
     gen_conf = None
+    format_options_conf = None
 
     def __init__(self, conf_file, conf_dict={}, cmd_args={}):
         self.logger = logging.getLogger('ydl_webui')
@@ -135,6 +153,8 @@ class conf(object):
                 self.svr_conf = svr_conf(conf_dict.get(f, {}))
             elif f == 'general':
                 self.gen_conf = gen_conf(conf_dict.get(f, {}))
+            elif f == 'format_options':
+                self.format_options_conf = format_options_conf(conf_dict.get(f, {}))
 
         # override configurations by cmdline arguments
         self.cmd_args_override()
@@ -160,6 +180,8 @@ class conf(object):
                 d[f] = self.svr_conf.dict()
             elif f == 'general':
                 d[f] = self.gen_conf.dict()
+            elif f == 'format_options':
+                d[f] = self.format_options_conf.dict()
 
         return d
 
@@ -173,6 +195,8 @@ class conf(object):
             return self.svr_conf
         elif key == 'general':
             return self.gen_conf
+        elif key == 'format_options':
+            return self.format_options_conf
         else:
             raise KeyError(key)
 

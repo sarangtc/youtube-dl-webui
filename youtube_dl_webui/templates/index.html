@@ -1,8 +1,10 @@
 <!doctype html>
 <html>
     <head>
-        <title>youtube-dl-webUI</title>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>yt-dlp-webUI</title>
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📹</text></svg>">
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='font-awesome/css/font-awesome.min.css') }}">
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/global.css') }}">
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/modalComponent.css') }}">
@@ -43,13 +45,19 @@
         </script>
         <div id="videoWrapper">
             <header>
-                <div class="operBtns">
+                <div class="action-buttons">
                     <button @click="showAddTaskModal"><i class="fa fa-plus" aria-hidden="true"></i> Add</button>
-                    <button @click="showRemoveTaskModal"><i class="fa fa-minus" aria-hidden="true"></i> Remove</button>
-                    <button @click="pauseTask"><i class="fa fa-pause" aria-hidden="true"></i> Pause</button>
-                    <button @click="resumeTask"><i class="fa fa-play" aria-hidden="true"></i> Resume</button>
+                    <button @click="showRemoveTaskModal"><i class="fa fa-trash" aria-hidden="true"></i> Remove</button>
+                    <button @click="pauseTask" v-if="videoList[currentSelected] && videoList[currentSelected].state !== 'finished'"><i class="fa fa-pause" aria-hidden="true"></i> Pause</button>
+                    <button @click="resumeTask" v-if="videoList[currentSelected] && videoList[currentSelected].state !== 'finished'"><i class="fa fa-play" aria-hidden="true"></i> Resume</button>
+                    <button v-if="videoList[currentSelected] && videoList[currentSelected].state === 'finished'" @click="downloadFile"><i class="fa fa-download" aria-hidden="true"></i> Download</button>
                     <button @click="preference"><i class="fa fa-cog" aria-hidden="true"></i> Preference</button>
-                    <button @click="about" style="float:right"><i class="fa fa-question-circle" aria-hidden="true"></i> About</button>
+                </div>
+                <div class="header-title">
+                    <h1>yt-dlp-webUI</h1>
+                </div>
+                <div class="header-right">
+                    <button @click="about"><i class="fa fa-question-circle" aria-hidden="true"></i> About</button>
                 </div>
             </header>
             <div class="main-body">
@@ -66,7 +74,7 @@
                               <i class="fa fa-check-circle" aria-hidden="true" style="color:grey"></i>&nbsp;Finished&nbsp;({{"{{stateCounter.finished}}"}})
                           </li>
                           <li v-cloak @click="filterTasks('paused')" v-bind:class="{'active': status === 'paused'}">
-                              <i class="fa fa-pause-circle" aria-hidden="true" style="green"></i>&nbsp;Paused&nbsp;({{"{{stateCounter.paused}}"}})
+                              <i class="fa fa-pause-circle" aria-hidden="true" style="color:green"></i>&nbsp;Paused&nbsp;({{"{{stateCounter.paused}}"}})
                           </li>
                           <li v-cloak @click="filterTasks('invalid')" v-bind:class="{'active': status === 'invalid'}">
                               <i class="fa fa-exclamation-triangle" aria-hidden="true" style="color:red"></i>&nbsp;Invalid&nbsp;({{"{{stateCounter.invalid}}"}})
@@ -90,7 +98,7 @@
                         <tbody>
                             <tr v-for="(video, index) in videoList" @click="selected(index)" :class="{'selected': currentSelected === index}">
                                 <td v-cloak>{{"{{index + 1}}"}}</td>
-                                <td v-clock style="font-size: 16px">
+                                <td v-cloak style="font-size: 16px">
                                     <i v-bind:style="{color: stateIcon(video.state).color}" v-bind:class="['fa', stateIcon(video.state).icon]" aria-hidden="true"></i>
                                 </td>
                                 <td>{{"{{video.title}}"}}</td>
@@ -126,11 +134,25 @@
                         <div>
                             <label>Log Size:</label><input type="text" ref="log-size" v-model="modalData.preference.general.log_size" v-cloak @keyup.esc="showModal = false"/>
                         </div>
-                        <div style="text-align:center;">
-                            <hr class="left-hr" /><span style="font-weight: bold;">youtube-dl options</span><hr class="right-hr" />
-                        </div>
                         <div>
-                            <label>Format:</label><input type="text" ref="format" v-model="modalData.preference.youtube_dl.format" v-cloak @keyup.esc="showModal = false"/>
+                            <label>About Custom HTML:</label><textarea ref="about-custom-html" v-model="modalData.preference.general.about_custom_html" v-cloak @keyup.esc="showModal = false" placeholder="Enter custom HTML to display in the About modal..."></textarea>
+                        </div>
+                        <div style="text-align:center;">
+                            <hr class="left-hr" /><span style="font-weight: bold;">yt-dlp options</span><hr class="right-hr" />
+                        </div>
+                        <div style="margin-bottom: 0px;">
+                            <label>Format:</label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select @change="selectFormatPreset($event.target.value, 'preference')" :value="getSelectedFormatPreset('preference')" style="flex: 1;">
+                                    <option value="">Select a preset...</option>
+                                    <option v-for="preset in getFormatPresets('preference')" :key="preset.value" :value="preset.value">{{"{{preset.label}}"}}</option>
+                                </select>
+                                <button @click="clearFormat('preference')" style="padding: 5px 10px; font-size: 12px; margin-right: 8px;">Clear</button>
+                            </div>
+                            <input type="text" ref="format" v-model="modalData.preference.youtube_dl.format" v-cloak @keyup.esc="showModal = false" @blur="onFormatInputBlur('preference')" placeholder="Or type custom format..." style="margin-top: 5px;"/>
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 0px; margin-bottom: 24px; font-style: italic; width: 100%; display: block; text-align: center;">
+                            Preferred format — yt-dlp will select the best available match.
                         </div>
                         <div>
                             <label>Proxy:</label><input type="text" ref="proxy" v-model="modalData.preference.youtube_dl.proxy" v-cloak @keyup.esc="showModal = false"/>
@@ -139,7 +161,7 @@
                             <label>Out Tmpl:</label><input type="text" ref="outtmpl" v-model="modalData.preference.youtube_dl.outtmpl" v-cloak @keyup.esc="showModal = false"/>
                         </div>
                         <div>
-                            <label>Rate Limit:</label><input type="text" ref="ratelimit" v-model="modalData.preference.youtube_dl.ratelimit" v-cloak @keyup.esc="showModal = false"/>
+                            <label>Rate Limit (bytes/s):</label><input type="text" ref="ratelimit" v-model="modalData.preference.youtube_dl.ratelimit" v-cloak @keyup.esc="showModal = false"/>
                         </div>
                     </div>
                     <div slot="footer">
@@ -159,6 +181,7 @@
                         <div style="justify-content: left;">
                             <span class="caption">License:</span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html">GPL-2.0</a>
                         </div>
+                        <div v-if="aboutCustomHtml" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #d8dde6;" v-html="aboutCustomHtml"></div>
                     </div>
                     <div slot="footer">
                         <button class="modal-default-button" @click="showModal = false">OK</button>
@@ -182,10 +205,21 @@
                             <label>URL:</label><input type="text" ref="url" v-model="modalData.add.url" v-cloak @keyup.enter="addTask" @keyup.esc="showModal = false"/>
                         </div>
                         <div style="text-align:center;">
-                            <hr class="left-hr" /><span style="font-weight: bold;">youtube-dl options</span><hr class="right-hr" />
+                            <hr class="left-hr" /><span style="font-weight: bold;">yt-dlp options</span><hr class="right-hr" />
                         </div>
-                        <div>
-                            <label>Format:</label><input type="text" ref="format" v-model="modalData.add.ydl_opts.format" v-cloak @keyup.esc="showModal = false"/>
+                        <div style="margin-bottom: 0px;">
+                            <label>Format:</label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select @change="selectFormatPreset($event.target.value, 'add')" :value="getSelectedFormatPreset('add')" style="flex: 1;">
+                                    <option value="">Select a preset...</option>
+                                    <option v-for="preset in getFormatPresets('add')" :key="preset.value" :value="preset.value">{{"{{preset.label}}"}}</option>
+                                </select>
+                                <button @click="clearFormat('add')" style="padding: 5px 10px; font-size: 12px; margin-right: 8px;">Clear</button>
+                            </div>
+                            <input type="text" ref="format" v-model="modalData.add.ydl_opts.format" v-cloak @keyup.esc="showModal = false" @blur="onFormatInputBlur('add')" placeholder="Or type custom format..." style="margin-top: 5px;"/>
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 0px; margin-bottom: 24px; font-style: italic; width: 100%; display: block; text-align: center;">
+                            Preferred format — yt-dlp will select the best available match.
                         </div>
                     </div>
                 </template>

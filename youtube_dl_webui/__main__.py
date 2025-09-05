@@ -24,6 +24,14 @@ if __name__ == '__main__':
     logging_json = os.path.join(dirname, 'logging.json')
     with open(logging_json) as f:
         logging_conf = json.load(f)
+    
+    # Check FLASK_DEBUG environment variable to control logging level
+    flask_debug = os.environ.get('FLASK_DEBUG', '0')
+    if flask_debug == '0':
+        # Set console handler to INFO level when not in debug mode
+        logging_conf['handlers']['console']['level'] = 'INFO'
+        logging_conf['loggers']['ydl_webui']['level'] = 'INFO'
+    
     logging.config.dictConfig(logging_conf)
 
     youtube_dl_webui.main()

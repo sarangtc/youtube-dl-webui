@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import uuid
+import re
 
 from hashlib import sha1
 
@@ -14,6 +15,31 @@ def new_uuid():
 
 def url2tid(url):
     return sha1(url.encode()).hexdigest()
+
+
+def sanitize_filename(filename):
+    """
+    Sanitize filename by replacing problematic characters with fullwidth equivalents.
+    This prevents issues when YouTube-DL downloads separate audio/video files and merges them.
+    """
+    replacement_map = {
+        ':': '：',  # U+FF1A FULLWIDTH COLON
+        '?': '？',  # U+FF1F FULLWIDTH QUESTION MARK
+        '*': '＊',  # U+FF0A FULLWIDTH ASTERISK
+        '<': '＜',  # U+FF1C FULLWIDTH LESS-THAN SIGN
+        '>': '＞',  # U+FF1E FULLWIDTH GREATER-THAN SIGN
+        '|': '｜',  # U+FF5C FULLWIDTH VERTICAL LINE
+        '"': '＂',  # U+FF02 FULLWIDTH QUOTATION MARK
+        '/': '／',  # U+FF0F FULLWIDTH SOLIDUS
+        '\\': '＼', # U+FF3C FULLWIDTH REVERSE SOLIDUS
+    }
+    
+    sanitized = filename
+    for char, replacement in replacement_map.items():
+        if char in sanitized:
+            sanitized = sanitized.replace(char, replacement)
+    
+    return sanitized
 
 
 class YoutubeDLWebUI(Exception):
@@ -62,7 +88,7 @@ class TaskExistenceError(TaskError):
 
 
 class YDLManagerError(YoutubeDLWebUI):
-    """Error related to youtube-dl manager."""
+    """Error related to yt-dlp manager."""
     def __init__(self, msg, tid=None, url=None, state=None):
         if tid:
             msg += ' tid={}'.format(tid)

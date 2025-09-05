@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import json
-
+import os
 from flask import Flask
 from flask import render_template
 from flask import request
+from flask import send_file
 from multiprocessing import Process
 from copy import deepcopy
 
@@ -110,6 +111,51 @@ def get_config():
 
     MSG.put('config', payload)
     return json.dumps(MSG.get())
+
+
+@app.route('/download/<tid>', methods=['GET'])
+def download_file(tid):
+    # Get task info to find the file path
+    payload = {'tid': tid, 'exerpt': False}
+    MSG.put('query', payload)
+    task_info = MSG.get()
+    
+    if task_info.get('status') == 'error':
+        return json.dumps({'status': 'error', 'errmsg': 'Task not found'})
+    
+    task_detail = task_info.get('detail', {})
+    
+    if task_detail.get('state') != 'finished':  # Check for string 'finished' state
+        return json.dumps({'status': 'error', 'errmsg': f'Task not finished (state: {task_detail.get("state")})'})
+    
+    # Get the file path from the task info
+    filename = task_detail.get('filename', '')
+    if not filename:
+        return json.dumps({'status': 'error', 'errmsg': 'File not found'})
+    
+    # Get the download directory from configuration
+    config_payload = {'act': 'get'}
+    MSG.put('config', config_payload)
+    config_info = MSG.get()
+    
+    if config_info.get('status') == 'success':
+        download_dir = config_info.get('config', {}).get('general', {}).get('download_dir', '/tmp/youtube_dl')
+    else:
+        download_dir = '/tmp/youtube_dl'  # Fallback to default
+    
+    # Construct the full file path by combining download directory with filename
+    # The database stores just the filename, but we need the full path
+    file_path = os.path.join(download_dir, filename)
+    
+    # Check if file exists
+    if not os.path.exists(file_path):
+        return json.dumps({'status': 'error', 'errmsg': f'File not found on disk: {file_path}'})
+    
+    # Send the file for download
+    try:
+        return send_file(file_path, as_attachment=True, download_name=os.path.basename(file_path))
+    except Exception as e:
+        return json.dumps({'status': 'error', 'errmsg': str(e)})
 
 
 ###
