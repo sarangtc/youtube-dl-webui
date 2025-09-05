@@ -2,7 +2,6 @@
     "general": {
         "download_dir": "/tmp/youtube_dl",
         "db_path": "/tmp/youtube_dl_webui.db",
-        "about_custom_html": "<a href='/youtubebaps' target='_blank'>BAPS Channel's Videos</a>",
         "log_size": 10
     },
     "server": {
