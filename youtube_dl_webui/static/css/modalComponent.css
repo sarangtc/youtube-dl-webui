@@ -61,7 +61,7 @@
 
 .modal-body select {
     cursor: pointer;
-    min-width: 260px;
+    min-width: 200px;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
@@ -70,6 +70,8 @@
     background-position: right 10px center;
     background-size: 18px 18px;
     padding-right: 36px;
+    padding-top: 18px;
+    padding-bottom: 18px;
 }
 
 .modal-body textarea {
