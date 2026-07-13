@@ -1,71 +1,370 @@
-# youtube-dl-webui
+# yt-dlp-webui
 
-Another webui for youtube-dl powered by Flask.
+**Current version: 1.0.0**
 
-[youtube-dl][1] is a powerful command-line based tool aims to download videos
-from Youtube.com and a few more sites. However, it lacks a manager to control
-and schedule all downloading tasks separately. Also, for people who like me
-prefers to deploy downloading tasks on a home-server, the ability to manage
-tasks remotely comes essentially.
+A modern, lightweight web interface for yt-dlp powered by Flask and Vue.js.
 
-There has been a webui for youtube available on Github, [Youtube-dl-WebUI][2].
-The drawbacks of this project is that it writes in PHP and [youtube-dl][1]
-writes in python. What makes things more worse is that, to use PHP, a web
-server is needly inevitably. This complexes service deployment and makes it not
-very 'light'.
+[yt-dlp][1] is a powerful command-line based tool that downloads videos
+from YouTube.com and many other sites. However, it lacks a manager to control
+and schedule downloading tasks separately. For users who prefer to deploy
+downloading tasks on a home server, the ability to manage tasks remotely is essential.
 
-**issues** are welcomed!
+This project provides a clean, modern web interface that makes yt-dlp accessible
+to users who prefer graphical interfaces over command-line tools.
 
-# Screenshot
+**Issues and contributions are welcomed!**
+
+## Features
+
+### Core Functionality
+- **Task Management**: Add, remove, pause, and resume download tasks
+- **Real-time Progress**: Live progress tracking with download speed and ETA
+- **Multiple Format Support**: Pre-configured format presets and custom format options
+- **File Download**: Direct download of completed files through the web interface
+
+### User Interface
+- **Modern Design**: Clean, responsive interface with Vue.js
+- **Right-click Context Menu**: Right-click any task for quick access to Pause, Resume,
+  Download, and Remove without selecting it first
+- **Task Filtering**: Filter tasks by status (All, Downloading, Finished, Paused, Invalid)
+- **Detailed Information**: View comprehensive task details including thumbnails, descriptions, and logs
+- **Real-time Updates**: Automatic refresh of task status and progress every 3 seconds
+- **Toast Notifications**: Clear success/error feedback for every action
+
+### Configuration
+- **Web-based Settings**: Configure download paths, formats, and other options through the UI
+- **Custom HTML Support**: Add custom HTML content to the About modal
+- **Format Presets**: Pre-defined format options for common use cases (best, 1080p, 720p,
+  480p, audio-only, or a custom yt-dlp format selector)
+- **Persistent Settings**: All preferences are saved and restored between sessions;
+  saving a partial change (e.g. from the Preferences dialog) no longer resets the
+  sections you didn't touch
+
+### Advanced Features
+- **Proxy Support**: Configure proxy settings for downloads
+- **Rate Limiting**: Control download speed to avoid overwhelming your connection
+- **Custom Output Templates**: Define custom filename patterns
+- **Logging**: Comprehensive per-task logging with configurable log size
+- **Database Storage**: SQLite database for persistent task storage
+- **Resilient Core**: A crash in one request handler no longer hangs the whole server;
+  a failed or unreachable URL is reported back as an "Invalid" task instead of
+  silently killing the worker
+- **yt-dlp Version Check & Update**: The About modal shows the installed yt-dlp
+  version and checks PyPI for a newer release, with a one-click Update button
+  that only appears when an update is actually available (see
+  [Updating yt-dlp](#updating-yt-dlp) for details and caveats)
+
+## Screenshot
 
 ![screenshot1](screen_shot/1.gif)
 
-# Prerequisite
+## Prerequisites
 
-This project is writen under the **python 3.6**, I haven't test the codes in
-any other python versions. So, I hightly recommend you to use python 3.6 to
-avoid any troubles.
+- **Python 3.6+** (should work with any modern Python 3 version)
+- **[ffmpeg](https://www.ffmpeg.org/download.html)** for post-processing (required for video merging and format conversion)
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** (installed automatically with the package)
 
-Also, we need **[ffmpeg](https://www.ffmpeg.org/download.html)** for post
-processing. Lack of ffmpeg may case some funtions not working.
+## Installation
 
-# Install
+### From Source
+```bash
+# Clone the repository
+git clone https://github.com/d0u9/youtube-dl-webui.git
+cd youtube-dl-webui
 
-To install youtube-dl-webui, you have to firstly install [youtube-dl][1] and
-[Flask][3], then simply execute the following command:
+# Install dependencies
+pip install -r requirements.txt
 
-    python setup.py install
+# Install the package
+python setup.py install
+```
 
-# How to use
+### Using pip
+```bash
+pip install youtube-dl-webui
+```
 
-Defaultly, youtube-dl-webui will find the configuration file in `/etc`
-directory named `youtube-dl-webui.conf`. The configuration file, however,
-need not to be always placed in such a place. Instead, the `-c` option is
-used to point out the configuration file.
+## Configuration
 
-Configuration file is __json__ formatted. An example configuration file
-can be found in the root directory of project.
+### Configuration Files
 
-Currently, not to much options available, use `-h` to find out all of them.
+The application uses JSON configuration files. There are several configuration files available:
 
-After everything is ready, simply execute:
+- **`example_config.json`**: Template configuration file with all available options
+- **`dockerfile/default_config.json`**: Default configuration used in Docker containers
+- **Your own config file**: Specify with the `-c` option when running
 
-    youtube-dl-webui -c CONFIGURATION_FILE
+### Configuration Priority
 
-A server will be started locally. The default port is **5000**.
+The application loads configuration in this order:
+1. **Command Line Arguments** (highest priority)
+2. **Main Config File** (specified with `-c` or `--config`)
+3. **Default Values** (from the config classes)
 
-**Note**, you have to remove proxy configuration option in your config file. I
-write it here for illustrating all valid config options.
+### Key Configuration Options
 
-# Docker image
+```json
+{
+    "general": {
+        "download_dir": "/path/to/downloads",
+        "db_path": "/path/to/database.db",
+        "log_size": 10,
+        "about_custom_html": "<p>Your custom HTML content here</p>"
+    },
+    "server": {
+        "host": "0.0.0.0",
+        "port": 5000
+    },
+    "youtube_dl": {
+        "format": "best",
+        "proxy": "socks5://127.0.0.1:1080",
+        "ratelimit": 1048576,
+        "outtmpl": "%(title)s.%(ext)s"
+    },
+    "format_options": [
+        { "label": "Best Quality", "value": "best" },
+        { "label": "720p MP4", "value": "best[height<=720][ext=mp4]/best[height<=720]/best" }
+    ]
+}
+```
 
-There also exists a docker image to easy the deployment. Check [HERE][4] for
-more.
+### Custom HTML in About Modal
 
----
+You can add custom HTML content to the About modal by setting the `about_custom_html` field in your configuration:
 
-[1]: https://github.com/rg3/youtube-dl
-[2]: https://github.com/avignat/Youtube-dl-WebUI
-[3]: https://github.com/pallets/flask
-[4]: https://hub.docker.com/r/d0u9/youtube-dl-webui/
+```json
+{
+    "general": {
+        "about_custom_html": "<p>Welcome to our custom instance!</p><p>Visit our <a href='https://example.com'>website</a> for more information.</p>"
+    }
+}
+```
 
+This HTML will be displayed in the About modal below the standard application information.
+
+## Usage
+
+### Basic Usage
+
+1. **Create a configuration file** based on `example_config.json`
+2. **Start the server**:
+   ```bash
+   youtube-dl-webui -c /path/to/your/config.json
+   ```
+3. **Open your browser** and navigate to `http://localhost:5000`
+4. **Add download tasks** using the "Add" button
+5. **Monitor progress** in the main interface
+6. **Download completed files** using the "Download" button
+
+### Command Line Options
+
+```bash
+youtube-dl-webui -c CONFIG_FILE [OPTIONS]
+
+Options:
+  -c, --config CONFIG_FILE    Path to configuration file
+  --host HOST                 Server host address (default: 0.0.0.0)
+  --port PORT                 Server port (default: 5000)
+  -h, --help                  Show help message
+```
+
+### Web Interface
+
+- **Add Task**: Click "Add" to start a new download, optionally picking a quality preset
+- **Remove Task**: Select a task and click "Remove", or right-click it, to delete it
+- **Pause/Resume**: Control active downloads from the toolbar or the right-click menu
+- **Download Files**: Download completed files directly from the browser
+- **Right-click Menu**: Right-click any row in the task list for quick access to
+  Pause, Resume, Download, and Remove — no need to select the row first
+- **Preferences**: Configure application settings through the web interface
+- **Filter Tasks**: Use the sidebar to filter tasks by status
+
+### Updating yt-dlp
+
+Sites change frequently, so an outdated yt-dlp is one of the most common
+causes of downloads suddenly failing. The About modal (the "About" button
+in the toolbar) shows the installed yt-dlp version and, when a newer one is
+available on PyPI, an **Update** button appears next to it.
+
+- **When the check runs**: only when you open the About modal — there's no
+  background polling. The installed-version check is always fresh; the
+  "latest version on PyPI" lookup is cached server-side for **1 hour** so
+  repeatedly opening/closing About doesn't hammer PyPI or stall on a slow
+  network.
+- **What clicking Update does**: the server runs
+  `pip install --upgrade yt-dlp` in its own Python environment, then
+  re-checks the installed version and reports it back.
+
+**Caveats:**
+- **Requires outbound internet access** from the machine running the server
+  (to reach PyPI) and write access to its Python environment's site-packages.
+- **Restart the server after updating.** Whether a newly-started download
+  picks up the new version without a restart depends on your OS's
+  `multiprocessing` start method — on Windows (`spawn`) it usually does; on
+  Linux/Docker (`fork`, the default) already-imported code stays in memory,
+  so the old version keeps being used until the server process restarts.
+  The update confirmation message says this explicitly.
+- **No authentication.** Like every other endpoint in this app, `/ydl/update`
+  is unauthenticated — anyone who can reach the web UI can trigger a pip
+  install. This matches the app's existing trust model (the same is true of
+  adding/removing tasks or reading config), but it's worth knowing if you
+  expose this server beyond your local network.
+
+## Docker Deployment
+
+`dockerfile/Dockerfile` builds the image **from this repository's working
+tree** (`COPY . .` at the repo root), so it always reflects whatever is on
+the branch/commit being built — not a separate, potentially-stale snapshot.
+`docker-compose.yml` at the repo root is the recommended way to run it: it
+builds from that Dockerfile and bind-mounts a single `./data` directory that
+holds everything the app writes (config, downloads, the sqlite database).
+
+### Using Docker Compose
+
+```bash
+docker compose up -d --build
+```
+
+On first start, if `./data/config.json` doesn't exist yet, the container
+creates one automatically (downloads and the database land right alongside
+it in `./data`). Edit `docker-compose.yml` first if you want different
+`PUID`/`PGID` values (they should match a real user on the host — check with
+`id -u` / `id -g` — so downloaded files aren't owned by root) or a different
+port/host bind mount path.
+
+### Deploying with Portainer
+
+1. **Push this repo (or your fork) to a git remote Portainer's host can
+   reach** (GitHub, GitLab, a self-hosted git server, ...). Portainer builds
+   directly from the repo, so nothing needs to be pre-built or pushed to a
+   registry.
+2. In Portainer: **Stacks → Add stack**.
+3. Set **Build method** to **Repository**.
+4. Fill in:
+   - **Repository URL**: your repo's clone URL (e.g.
+     `https://github.com/<you>/youtube-dl-webui.git`)
+   - **Repository reference**: the branch to deploy, e.g.
+     `refs/heads/master`
+   - **Compose path**: `docker-compose.yml` (the default — matches the file
+     at the repo root)
+   - If it's a private repo, add the authentication Portainer asks for.
+5. Click **Deploy the stack**. Portainer clones the repo, builds the image
+   from `dockerfile/Dockerfile`, and starts the container.
+6. To pick up new changes later, use Portainer's **Pull and redeploy** (or
+   set up a webhook under the stack's settings for auto-deploy on push).
+
+The `./data` bind mount in `docker-compose.yml` resolves relative to
+wherever Portainer checks the repo out on its host (its stack working
+directory) — that's fine and persists across redeploys of the same stack.
+If you'd rather point it at a specific host path, edit the `volumes:` line
+in `docker-compose.yml` to an absolute path (e.g. `/srv/youtube-dl-webui:/data`)
+before deploying.
+
+### Manual `docker build` / `docker run`
+
+```bash
+# from the repository root
+docker build -f dockerfile/Dockerfile -t youtube-dl-webui .
+
+docker run -d \
+  --name youtube-dl-webui \
+  -p 5000:5000 \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e CONF_FILE=/data/config.json \
+  -v /path/on/host:/data \
+  youtube-dl-webui
+```
+
+### Using the Upstream Docker Hub Image
+
+The upstream project also publishes a prebuilt image, separate from anything
+built from this repo — it won't include any of this fork's fixes unless
+they've been merged upstream:
+
+```bash
+docker pull d0u9/youtube-dl-webui
+docker run -d \
+  --name youtube-dl-webui \
+  -p 5000:5000 \
+  -v /path/to/downloads:/tmp/youtube_dl \
+  -v /path/to/config:/config.json \
+  d0u9/youtube-dl-webui
+```
+
+### Docker Environment Variables
+
+- `CONF_FILE`: Path to configuration file (default: `/config.json`)
+- `HOST`: Server host (default: `0.0.0.0`)
+- `PORT`: Server port (default: `5000`)
+- `PUID`: User ID the app runs as inside the container (default: root)
+- `PGID`: Group ID the app runs as inside the container (default: root)
+
+## API
+
+The application provides a REST API for programmatic access:
+
+- `GET /task/list?state={all|downloading|finished|paused|invalid}` - List tasks
+- `POST /task` - Create a new task, body: `{"url": "...", "ydl_opts": {"format": "..."}}`
+- `DELETE /task/tid/{tid}` - Delete a task
+- `DELETE /task/tid/{tid}?del_file=true` - Delete a task and its downloaded file
+- `PUT /task/tid/{tid}?act=pause` - Pause a task
+- `PUT /task/tid/{tid}?act=resume` - Resume (or retry) a task
+- `GET /task/tid/{tid}/status` - Get full task details, including logs
+- `GET /task/state_counter` - Get the number of tasks in each state
+- `GET /config` - Get the current configuration
+- `POST /config` - Update the configuration (merges into the existing config)
+- `GET /download/{tid}` - Download the completed file for a finished task
+- `GET /ydl/version` - Get the installed yt-dlp version, the latest version on
+  PyPI (cached for 1 hour), and whether an update is available
+- `POST /ydl/update` - Run `pip install --upgrade yt-dlp` on the server and
+  report the resulting version (see [Updating yt-dlp](#updating-yt-dlp) for
+  caveats)
+
+Every response is JSON with a `status` field (`success` or `error`); error
+responses also include an `errmsg` field.
+
+See `REST_API.txt` for the older, partially out-of-date endpoint reference.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **ffmpeg not found**: Install ffmpeg and ensure it's in your PATH
+2. **Permission errors**: Check file permissions for download directory and database
+3. **Port already in use**: Change the port in your configuration file
+4. **Proxy issues**: Verify proxy settings in your configuration
+5. **Database won't open on first run**: the app now creates the database's parent
+   directory automatically; if it still fails, check that the process can write to
+   the configured `db_path`
+6. **"Update" button doesn't appear, or update fails**: this needs outbound
+   internet access to PyPI and write access to the server's Python
+   environment — check both if it fails. If the server truly has no internet
+   access, update manually instead: `pip install --upgrade yt-dlp` in the
+   same environment, then restart the server. See
+   [Updating yt-dlp](#updating-yt-dlp) for details.
+
+### Logs
+
+Check the application logs for detailed error information. Logs are stored in the configured log file and can be viewed through the web interface.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is licensed under the GPL-2.0 License - see the LICENSE file for details.
+
+## Links
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - The underlying download tool
+- [Flask](https://github.com/pallets/flask) - Web framework
+- [Docker Hub](https://hub.docker.com/r/d0u9/youtube-dl-webui/) - Docker image
+- [Original Youtube-dl-WebUI](https://github.com/avignat/Youtube-dl-WebUI) - PHP-based alternative
+
+[1]: https://github.com/yt-dlp/yt-dlp

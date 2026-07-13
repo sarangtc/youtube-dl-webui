@@ -26,7 +26,11 @@ class conf_base(object):
             # More check can be made here
             if key in conf_dict:
                 self._conf[key] = conf_dict[key] if func is None else func(conf_dict.get(key, dft_val))
-                self._conf[key] = int(self._conf[key]) if val_type == 'int' else self._conf[key]
+                if val_type == 'int':
+                    try:
+                        self._conf[key] = int(self._conf[key])
+                    except (TypeError, ValueError):
+                        self._conf[key] = dft_val
             elif dft_val is not None:
                 self._conf[key] = dft_val if func is None else func(conf_dict.get(key, dft_val))
 
@@ -128,6 +132,18 @@ class conf(object):
             self.logger.error("input parameter(conf_dict) is not an instance of dict")
             return
 
+        # merge over the current configuration so a partial update (e.g. the
+        # preference dialog, which never sends the 'server' section) does not
+        # silently reset the omitted sections to their defaults
+        if self.ydl_conf is not None:
+            merged = self.dict()
+            for key, val in conf_dict.items():
+                if key in merged and isinstance(merged[key], dict) and isinstance(val, dict):
+                    merged[key].update(val)
+                else:
+                    merged[key] = val
+            conf_dict = merged
+
         for f in self._valid_fields:
             if f == 'youtube_dl':
                 self.ydl_conf = ydl_conf(conf_dict.get(f, {}))
@@ -140,16 +156,22 @@ class conf(object):
         self.cmd_args_override()
 
     def save2file(self):
-        if self.conf_file is not None:
-            try:
-                with open(self.conf_file, 'w') as f:
-                    json.dump(self.dict(), f, indent=4)
-            except PermissionError:
-                return (False, 'permission error')
-            except FileNotFoundError:
-                return (False, 'can not find file')
-            else:
-                return (True, None)
+        if self.conf_file is None:
+            # config only lives in memory; the update still applies to the
+            # running instance, it just cannot be persisted
+            return (True, None)
+
+        try:
+            with open(self.conf_file, 'w') as f:
+                json.dump(self.dict(), f, indent=4)
+        except PermissionError:
+            return (False, 'permission error')
+        except FileNotFoundError:
+            return (False, 'can not find file')
+        except OSError as e:
+            return (False, str(e))
+        else:
+            return (True, None)
 
     def dict(self):
         d = {}

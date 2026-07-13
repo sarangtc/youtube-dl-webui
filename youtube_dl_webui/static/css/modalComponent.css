@@ -5,9 +5,9 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, .5);
+    background-color: rgba(15, 23, 42, .45);
     display: table;
-    transition: opacity .3s ease;
+    transition: opacity .25s ease;
 }
 
 .modal-wrapper {
@@ -16,93 +16,139 @@
 }
 
 .modal-container {
-    width: 500px;
-    margin: 0px auto;
-    padding: 20px;
-    background-color: #fff;
-    border-radius: 6px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, .4);
-    transition: all .3s ease;
-    font-family: Helvetica, Arial, sans-serif;
+    width: 520px;
+    max-width: calc(100vw - 32px);
+    margin: 0 auto;
+    padding: 20px 24px;
+    background-color: var(--surface, #fff);
+    border-radius: 12px;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, .25);
+    transition: all .25s ease;
+    font-family: inherit;
 }
 
 .modal-header div {
-    font-weight: bold;
-    font-size: 20px;
+    font-weight: 700;
+    font-size: 18px;
     margin-top: 0;
-    color: #020202;
+    color: var(--text, #1e293b);
 }
 
-.modal-body div {
-    margin: 20px 0;
+.modal-body {
+    margin: 16px 0;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.modal-body p {
+    margin: 8px 0;
+}
+
+.modal-body p.hint {
+    font-size: 12px;
+    color: var(--text-muted, #64748b);
+}
+
+.modal-body .form-section {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted, #64748b);
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    padding-bottom: 4px;
+    margin: 18px 0 10px 0;
+}
+
+.modal-body .form-section:first-child {
+    margin-top: 0;
+}
+
+.modal-body .form-row {
+    margin: 10px 0;
     display: flex;
-    justify-content: center;
     align-items: center;
+    gap: 10px;
 }
 
-.modal-body label {
-    min-width: 80px;
-    max-width: 100px;
+.modal-body label,
+.modal-body .caption {
+    min-width: 120px;
+    max-width: 120px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted, #64748b);
 }
 
-.modal-body input {
-    font-size: 15px;
+.modal-body .ydl-status {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text, #1e293b);
+}
+
+.modal-body .badge-update,
+.modal-body .badge-uptodate {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.modal-body .badge-update {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.modal-body .badge-uptodate {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.modal-body .btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.modal-body input,
+.modal-body select {
+    font-size: 13px;
+    font-family: inherit;
     display: block;
     width: 100%;
-    height: 12px;
-    padding: 5px;
+    padding: 8px 10px;
+    color: var(--text, #1e293b);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 6px;
+    background-color: #fff;
+    transition: border-color .15s ease, box-shadow .15s ease;
 }
 
-.modal-body hr {
-    border: 0; 
-    height: 1px; 
-    margin-left:auto;
-    margin-right:auto;
-    width: 40%;
+.modal-body input:focus,
+.modal-body select:focus {
+    outline: none;
+    border-color: var(--primary, #2563eb);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
 }
 
-.modal-body .left-hr {
-    float: left;
-    background-image: -webkit-linear-gradient(left, #f0f0f0, #000000, #000000);
-    background-image: -moz-linear-gradient(left, #f0f0f0, #000000, #000000);
-    background-image: -ms-linear-gradient(left, #f0f0f0, #000000, #000000);
-    background-image: -o-linear-gradient(left, #f0f0f0, #000000, #000000); 
-}
-
-.modal-body .right-hr {
-    float: right;
-    background-image: -webkit-linear-gradient(left, #000000, #000000, #f0f0f0);
-    background-image: -moz-linear-gradient(left, #000000, #000000, #f0f0f0);
-    background-image: -ms-linear-gradient(left, #000000, #000000, #f0f0f0);
-    background-image: -o-linear-gradient(left, #000000, #000000, #f0f0f0); 
-}
-
-.modal-body .caption {
-    width: 80px;
-    font-weight: bold;
+.modal-body input::placeholder {
+    color: #94a3b8;
 }
 
 .modal-footer {
     display: flex;
-    justify-content: center;
+    justify-content: flex-end;
     align-items: center;
-}
-
-.modal-default-button {
-    float: right;
-    width: 100px;
-    height: 30px;
-    font-size: 15px;
-    margin: 0 10px;
+    gap: 8px;
+    padding-top: 4px;
 }
 
 /*
  * The following styles are auto-applied to elements with
  * transition="modal" when their visibility is toggled
  * by Vue.js.
- *
- * You can easily play with the modal transition by editing
- * these styles.
  */
 
 .modal-enter {
@@ -115,6 +161,5 @@
 
 .modal-enter .modal-container,
 .modal-leave-active .modal-container {
-    -webkit-transform: scale(1.1);
-    transform: scale(1.1);
+    transform: scale(1.05);
 }

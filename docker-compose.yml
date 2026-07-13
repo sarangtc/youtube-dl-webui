@@ -1,0 +1,30 @@
+# Portainer: Stacks -> Add stack -> Build method: Repository -> point it at
+# this repo/branch, leave "Compose path" as the default (docker-compose.yml).
+# Portainer builds the image itself from dockerfile/Dockerfile using this
+# repo's working tree, so it stays in sync with whatever's on this branch.
+#
+# Everything the app writes (config, downloaded files, the sqlite db) lives
+# under the single ./data bind mount below -- back that one directory up and
+# you have the whole app's state.
+services:
+  youtube-dl-webui:
+    build:
+      context: .
+      dockerfile: dockerfile/Dockerfile
+    container_name: youtube-dl-webui
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      # match these to a real user on the host so downloaded files aren't
+      # owned by root; find yours with `id -u` / `id -g`
+      PUID: "1000"
+      PGID: "1000"
+      CONF_FILE: "/data/config.json"
+      HOST: "0.0.0.0"
+      PORT: "5000"
+    volumes:
+      # relative to wherever Portainer checks this repo out on the host
+      # (its "stack" working directory); swap for an absolute host path
+      # (e.g. /srv/youtube-dl-webui:/data) if you want it somewhere specific
+      - ./data:/data

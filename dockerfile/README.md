@@ -2,6 +2,12 @@
 
 ---
 
+> **See the main [README.md](../README.md#docker-deployment) for the
+> current, tested deployment instructions** (Docker Compose and Portainer).
+> This file documents the older manual `docker run` flow and the upstream
+> Docker Hub image, which is a separate build that may not include this
+> fork's fixes.
+
 Visit [GitHub](https://github.com/d0u9/youtube-dl-webui) for more details.
 
 

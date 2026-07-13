@@ -1,0 +1,8 @@
+.git
+__pycache__
+*.pyc
+*.log
+*.db
+.pytest_cache
+test
+screen_shot

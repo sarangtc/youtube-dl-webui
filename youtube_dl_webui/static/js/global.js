@@ -3,27 +3,38 @@ var videoDownload = (function (Vue, extendAM){
     var VueToast = window.vueToasts ? window.vueToasts.default || window.vueToasts : window.vueToasts;
     videoDownload.vm = null;
     videoDownload.tasksData = {
-        headPath: 'http://localhost:5000/',
+        headPath: window.location.protocol + '//' + window.location.host + '/',
         videoList: [],
-        videoListCopy: [],
         showModal: false,
         modalType: 'addTask',
-        // tablist: ['status', 'details', 'file24s', 'peers', 'options'],
         tablist: ['Status', 'Details', 'Log'],
         showTab: 'Status',
         stateCounter: { all: 0, downloading: 0, finished: 0, paused: 0, invalid: 0},
+        formatPresets: [
+            { label: 'Default (server config)',        value: '' },
+            { label: 'Best video + audio',             value: 'bestvideo*+bestaudio/best' },
+            { label: 'Best MP4',                       value: 'best[ext=mp4]/best' },
+            { label: '1080p',                          value: 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best' },
+            { label: '720p',                           value: 'bestvideo[height<=720]+bestaudio/best[height<=720]/best' },
+            { label: '480p',                           value: 'bestvideo[height<=480]+bestaudio/best[height<=480]/best' },
+            { label: 'Audio only (m4a)',               value: 'bestaudio[ext=m4a]/bestaudio' },
+            { label: 'Custom…',                        value: 'custom' }
+        ],
         modalData: {
-            add: { url: '', ydl_opts: {} },
-            remove: { removeFile: false },
-            preference: {youtube_dl: {fomart: '', proxy: ''}, general: {download_dir: '', db_path: '', log_size: '', ratelimit: '', outtmpl: ''}},
+            add: { url: '', preset: '', customFormat: '' },
+            preference: {
+                youtube_dl: { format: '', proxy: '', ratelimit: '', outtmpl: '' },
+                general: { download_dir: '', db_path: '', log_size: '' }
+            },
         },
-        currentSelected: null,
+        selectedTid: null,
         taskDetails: {},
-        taskInfoUrl: null,
+        contextMenu: { visible: false, x: 0, y: 0 },
+        ydl: { installed: '', latest: '', updateAvailable: false, checking: false, updating: false },
         status: 'all',
+        fetchFailures: 0,
         maxToasts: 4,
         position: 'bottom right',
-        theme: 'error',
         timeLife: 3500,
         closeBtn: false
     };
@@ -37,21 +48,42 @@ var videoDownload = (function (Vue, extendAM){
                 'modal': {template: '#modal-template'},
                 VueToast
             },
-            watch:{
-                stateCounter: function(val){
-                    val.all = val.downloading + val.finished + val.paused + val.invalid;
+            computed: {
+                selectedTask: function() {
+                    var tid = this.selectedTid;
+                    if (tid === null) return null;
+                    for (var i = 0; i < this.videoList.length; i++) {
+                        if (this.videoList[i].tid === tid) return this.videoList[i];
+                    }
+                    return null;
+                },
+                hasSelection: function() {
+                    return this.selectedTask !== null;
+                },
+                canDownload: function() {
+                    return this.selectedTask !== null && this.selectedTask.state === 'finished';
                 }
             },
             mounted: function () {
                 this.resetOptions();
                 setInterval(videoDownload.timeOut, 3000);
+
+                // clicking/scrolling anywhere outside the context menu closes it
+                var _self = this;
+                document.addEventListener('click', function(){ _self.closeContextMenu(); });
+                document.addEventListener('keydown', function(e){
+                    if (e.key === 'Escape') _self.closeContextMenu();
+                });
+                window.addEventListener('resize', function(){ _self.closeContextMenu(); });
+                window.addEventListener('scroll', function(){ _self.closeContextMenu(); }, true);
             },
             methods: {
                 showAddTaskModal: function(){
                     this.modalData.add.url = '';
+                    this.modalData.add.preset = '';
+                    this.modalData.add.customFormat = '';
                     this.showModal = true;
                     this.modalType = 'addTask';
-                    console.log(this.modalData);
                     this.$nextTick(function(){
                         this.$refs.url.focus();
                     });
@@ -62,84 +94,184 @@ var videoDownload = (function (Vue, extendAM){
                             this.addTask();
                             break;
                         case 'removeTask':
-                            this.removeTask();
+                            this.removeTask(false);
                             break;
                         case 'updatePreference':
                             this.updatePreference();
                             break;
+                        default:
+                            this.showModal = false;
                     }
                 },
                 showRemoveTaskModal: function(){
-                    this.modalData.remove.removeFile = false;
+                    if (!this.requireSelection()) return;
                     this.showModal = true;
                     this.modalType = 'removeTask';
+                },
+                requireSelection: function() {
+                    if (!this.hasSelection) {
+                        this.showAlertToast('Select a task first', 'warning');
+                        return false;
+                    }
+                    return true;
+                },
+                parseResponse: function(res) {
+                    var body = typeof res.data === 'string' ? res.data : res.body;
+                    try {
+                        return JSON.parse(body);
+                    } catch (e) {
+                        return typeof body === 'object' && body !== null ? body : {status: 'error', errmsg: 'Bad response from server'};
+                    }
+                },
+                errText: function(err) {
+                    if (err && err.status === 0) return 'Cannot reach the server';
+                    return (err && (err.statusText || err.errmsg)) || 'Request failed';
                 },
                 addTask: function(){
                     var _self = this;
                     var url = _self.headPath + 'task';
-                    for (var key in _self.modalData.add.ydl_opts) {
-                        if (_self.modalData.add.ydl_opts[key].trim() == '')
-                            delete _self.modalData.add.ydl_opts[key];
+                    var taskUrl = _self.modalData.add.url.trim();
+                    if (taskUrl === '') {
+                        _self.showAlertToast('Please enter a URL', 'warning');
+                        return;
                     }
-                    Vue.http.post(url, _self.modalData.add, {emulateJSON: false}).then(function(res){
+
+                    var ydl_opts = {};
+                    var fmt = _self.modalData.add.preset === 'custom'
+                            ? _self.modalData.add.customFormat.trim()
+                            : _self.modalData.add.preset;
+                    if (fmt !== '') ydl_opts.format = fmt;
+
+                    Vue.http.post(url, {url: taskUrl, ydl_opts: ydl_opts}, {emulateJSON: false}).then(function(res){
+                        var ret = _self.parseResponse(res);
+                        if (ret.status === 'error') {
+                            _self.showAlertToast(ret.errmsg || 'Could not add task', 'error');
+                            return;
+                        }
                         _self.showModal = false;
+                        _self.showAlertToast('Task added', 'success');
                         that.getTaskList();
                     }, function(err){
-                        _self.showAlertToast(err, 'error');
+                        _self.showAlertToast(_self.errText(err), 'error');
                     });
                 },
                 updatePreference: function () {
                     var _self = this;
                     var url = _self.headPath + 'config';
                     Vue.http.post(url, _self.modalData.preference, {emulateJSON: false}).then(function(res){
-                        console.log("Successfully");
+                        var ret = _self.parseResponse(res);
+                        if (ret.status === 'error') {
+                            _self.showAlertToast(ret.errmsg || 'Could not save preferences', 'error');
+                            return;
+                        }
+                        _self.showModal = false;
+                        _self.showAlertToast('Preferences saved', 'success');
                     }, function(err){
-                        _self.showAlertToast(err, 'error');
+                        _self.showAlertToast(_self.errText(err), 'error');
                     });
-                    _self.showModal = false;
                 },
-                removeTask: function(){
+                removeTask: function(removeFile){
                     var _self = this;
-                    var url = _self.headPath + 'task/tid/' + (_self.videoList[_self.currentSelected] && _self.videoList[_self.currentSelected].tid);
-                    if(_self.modalData.remove.removeFile){
+                    if (!_self.hasSelection) { _self.showModal = false; return; }
+                    var url = _self.headPath + 'task/tid/' + _self.selectedTask.tid;
+                    if (removeFile) {
                         url += '?del_file=true';
                     }
                     Vue.http.delete(url).then(function(res){
-                        _self.showAlertToast('Task Delete', 'info');
-                        _self.videoList.splice(_self.currentSelected, _self.currentSelected+1);
+                        var ret = _self.parseResponse(res);
+                        if (ret.status === 'error') {
+                            _self.showAlertToast(ret.errmsg || 'Could not remove task', 'error');
+                            return;
+                        }
                         _self.showModal = false;
+                        _self.selectedTid = null;
+                        _self.taskDetails = {};
+                        _self.showAlertToast(removeFile ? 'Task and file removed' : 'Task removed', 'success');
                         that.getTaskList();
                     }, function(err){
-                        _self.showAlertToast(err, 'error');
+                        _self.showAlertToast(_self.errText(err), 'error');
                     });
                 },
                 removeData: function(){
-                    this.modalData.remove.removeFile = true;
-                    this.removeTask();
+                    this.removeTask(true);
                 },
                 pauseTask: function(){
                     var _self = this;
-                    var url = _self.headPath + 'task/tid/' +  (_self.videoList[_self.currentSelected] && _self.videoList[_self.currentSelected].tid) + '?act=pause';
+                    if (!_self.requireSelection()) return;
+                    var url = _self.headPath + 'task/tid/' + _self.selectedTask.tid + '?act=pause';
                     Vue.http.put(url).then(function(res){
-                        _self.showAlertToast('Task Pause', 'info');
+                        var ret = _self.parseResponse(res);
+                        if (ret.status === 'error') {
+                            _self.showAlertToast(ret.errmsg || 'Could not pause task', 'error');
+                            return;
+                        }
+                        _self.showAlertToast('Task paused', 'info');
                         that.getTaskList();
                     }, function(err){
-                        _self.showAlertToast(err, 'error');
+                        _self.showAlertToast(_self.errText(err), 'error');
                     });
                 },
                 resumeTask: function(){
                     var _self = this;
-                    var url = _self.headPath + 'task/tid/' + (_self.videoList[_self.currentSelected] && _self.videoList[_self.currentSelected].tid) + '?act=resume';
+                    if (!_self.requireSelection()) return;
+                    var url = _self.headPath + 'task/tid/' + _self.selectedTask.tid + '?act=resume';
                     Vue.http.put(url).then(function(res){
-                        _self.showAlertToast('Task Resume', 'info');
+                        var ret = _self.parseResponse(res);
+                        if (ret.status === 'error') {
+                            _self.showAlertToast(ret.errmsg || 'Could not resume task', 'error');
+                            return;
+                        }
+                        _self.showAlertToast('Task resumed', 'info');
                         that.getTaskList();
                     }, function(err){
-                        _self.showAlertToast(err, 'error');
+                        _self.showAlertToast(_self.errText(err), 'error');
                     });
+                },
+                downloadFile: function(){
+                    if (!this.requireSelection()) return;
+                    if (this.selectedTask.state !== 'finished') {
+                        this.showAlertToast('Task is not finished yet', 'warning');
+                        return;
+                    }
+                    window.open(this.headPath + 'download/' + this.selectedTask.tid, '_blank');
                 },
                 about: function() {
                     this.showModal = true;
                     this.modalType = 'about';
+                    this.loadYdlVersion();
+                },
+                loadYdlVersion: function() {
+                    var _self = this;
+                    _self.ydl.checking = true;
+                    Vue.http.get(_self.headPath + 'ydl/version').then(function(res){
+                        var ret = _self.parseResponse(res);
+                        _self.ydl.checking = false;
+                        if (ret.status === 'error') return;
+                        _self.ydl.installed = ret.installed || '';
+                        _self.ydl.latest = ret.latest || '';
+                        _self.ydl.updateAvailable = !!ret.update_available;
+                    }, function(err){
+                        _self.ydl.checking = false;
+                    });
+                },
+                updateYdl: function() {
+                    var _self = this;
+                    if (_self.ydl.updating) return;
+                    _self.ydl.updating = true;
+                    Vue.http.post(_self.headPath + 'ydl/update', {}, {emulateJSON: false}).then(function(res){
+                        var ret = _self.parseResponse(res);
+                        _self.ydl.updating = false;
+                        if (ret.status === 'error') {
+                            _self.showAlertToast(ret.errmsg || 'Could not update yt-dlp', 'error');
+                            return;
+                        }
+                        if (ret.installed) _self.ydl.installed = ret.installed;
+                        _self.ydl.updateAvailable = false;
+                        _self.showAlertToast(ret.message || 'yt-dlp updated', 'success');
+                    }, function(err){
+                        _self.ydl.updating = false;
+                        _self.showAlertToast(_self.errText(err), 'error');
+                    });
                 },
                 preference: function() {
                     var _self = this;
@@ -148,102 +280,149 @@ var videoDownload = (function (Vue, extendAM){
                     this.showModal = true;
                     this.modalType = 'updatePreference';
                     Vue.http.get(url).then(function(res) {
-                        var responseJSON = JSON.parse(res.data);
-                        if (responseJSON.status === 'error') {
-                            return false;
-                        } else {
-                            config = responseJSON['config'];
-                            _self.modalData.preference.general.download_dir = config.general.download_dir;
-                            _self.modalData.preference.general.db_path = config.general.db_path;
-                            _self.modalData.preference.general.log_size = config.general.log_size;
-                            _self.modalData.preference.youtube_dl.format = config.youtube_dl.format;
-                            _self.modalData.preference.youtube_dl.proxy = config.youtube_dl.proxy;
-                            _self.modalData.preference.youtube_dl.ratelimit = config.youtube_dl.ratelimit;
-                            _self.modalData.preference.youtube_dl.outtmpl = config.youtube_dl.outtmpl;
+                        var ret = _self.parseResponse(res);
+                        if (ret.status === 'error' || !ret.config) {
+                            _self.showAlertToast(ret.errmsg || 'Could not load configuration', 'error');
+                            return;
                         }
+                        var config = ret.config;
+                        _self.modalData.preference.general.download_dir = config.general.download_dir;
+                        _self.modalData.preference.general.db_path = config.general.db_path;
+                        _self.modalData.preference.general.log_size = config.general.log_size;
+                        _self.modalData.preference.youtube_dl.format = config.youtube_dl.format;
+                        _self.modalData.preference.youtube_dl.proxy = config.youtube_dl.proxy;
+                        _self.modalData.preference.youtube_dl.ratelimit = config.youtube_dl.ratelimit;
+                        _self.modalData.preference.youtube_dl.outtmpl = config.youtube_dl.outtmpl;
+                    }, function(err){
+                        _self.showAlertToast(_self.errText(err), 'error');
                     });
                 },
-                selected: function(index){
+                selected: function(video){
+                    this.selectedTid = video.tid;
+                    this.getTaskInfoById();
+                },
+                openContextMenu: function(event, video){
+                    this.selectedTid = video.tid;
+                    this.getTaskInfoById();
+
+                    this.contextMenu.x = event.clientX;
+                    this.contextMenu.y = event.clientY;
+                    this.contextMenu.visible = true;
+
                     var _self = this;
-                    this.currentSelected = index;
-                    _self.taskInfoUrl = _self.headPath + 'task/tid/' +  (_self.videoList[_self.currentSelected] && _self.videoList[_self.currentSelected].tid) + '/status';
-                    _self.getTaskInfoById();
+                    this.$nextTick(function(){
+                        _self.clampContextMenu();
+                    });
+                },
+                clampContextMenu: function(){
+                    var el = this.$refs.contextMenu;
+                    if (!el) return;
+                    var rect = el.getBoundingClientRect();
+                    var maxX = window.innerWidth - rect.width - 4;
+                    var maxY = window.innerHeight - rect.height - 4;
+                    if (this.contextMenu.x > maxX) this.contextMenu.x = Math.max(4, maxX);
+                    if (this.contextMenu.y > maxY) this.contextMenu.y = Math.max(4, maxY);
+                },
+                closeContextMenu: function(){
+                    this.contextMenu.visible = false;
+                },
+                ctxPause: function(){
+                    this.pauseTask();
+                    this.closeContextMenu();
+                },
+                ctxResume: function(){
+                    this.resumeTask();
+                    this.closeContextMenu();
+                },
+                ctxDownload: function(){
+                    if (this.canDownload) this.downloadFile();
+                    this.closeContextMenu();
+                },
+                ctxRemove: function(){
+                    this.showRemoveTaskModal();
+                    this.closeContextMenu();
                 },
                 getTaskInfoById: function(){
                     var _self = this;
-                    if(!_self.taskInfoUrl) return false;
-                    Vue.http.get(_self.taskInfoUrl).then(function(res){
-                        var responseJSON = JSON.parse(res.data);
-                        if(responseJSON.status === 'error'){
-                            return false;
-                        }
-                        _self.taskDetails = responseJSON.detail;
+                    if (_self.selectedTid === null) return;
+                    var url = _self.headPath + 'task/tid/' + _self.selectedTid + '/status';
+                    Vue.http.get(url).then(function(res){
+                        var ret = _self.parseResponse(res);
+                        if (ret.status === 'error') return;
+                        _self.taskDetails = ret.detail;
                     }, function(err){
-                        _self.showAlertToast('Network connection lost', 'error');
+                        // list polling already reports connectivity problems
                     });
                 },
                 filterTasks: function(filterStatus) {
-                    var _self = this;
-                    _self.status = filterStatus;
+                    this.status = filterStatus;
                     that.getTaskList();
                 },
                 speedConv: function(state, value) {
-                    if (state == 'paused' || state == 'invalid')
-                        return '0 B/s';
-                    else if (state == 'finished')
-                        return 'Done';
-                    return this.bitsToHuman(value) + '/s';
+                    if (state === 'downloading')
+                        return this.bitsToHuman(value) + '/s';
+                    return '—';
                 },
                 etaConv: function(state, value) {
-                    if (state == 'paused' || state == 'invalid' || state == 'finished')
-                        return 'NaN';
-                    return this.secondsToHuman(value);
+                    if (state === 'downloading')
+                        return this.secondsToHuman(value);
+                    return '—';
                 },
                 progressConv: function(state, value) {
-                    if (state == 'finished')
+                    if (state === 'finished')
                         return 'Done';
-                    return value;
+                    if (state === 'invalid')
+                        return 'Error';
+                    return value || '0%';
+                },
+                progressWidth: function(video) {
+                    if (video.state === 'finished') return '100%';
+                    var p = parseFloat(video.percent);
+                    if (isNaN(p) || p < 0) p = 0;
+                    if (p > 100) p = 100;
+                    return p + '%';
                 },
                 bitsToHuman: function(value) {
-                    var tmp = value, count = 0;
-                    var metricList = [' B', ' KB', ' M', ' G', ' T',' P',' E',' Z'];
+                    var tmp = Number(value), count = 0;
+                    if (isNaN(tmp) || tmp <= 0)
+                        return '0 B';
+                    var metricList = [' B', ' KB', ' MB', ' GB', ' TB', ' PB'];
 
-                    while(tmp/1024 > 1){
-                        tmp = tmp/1024;
+                    while (tmp / 1024 >= 1 && count < metricList.length - 1) {
+                        tmp = tmp / 1024;
                         count++;
                     }
-                    return tmp.toFixed(2) + metricList[count];
+                    return tmp.toFixed(count === 0 ? 0 : 2) + metricList[count];
                 },
                 secondsToHuman: function(value) {
-                    var tmp = '';
-                    tmp = value % 60 + 's';
-                    value = value/ 60;
-                    if(value > 1) {
-                        tmp = parseInt(value % 60) + 'm' + tmp;
-                        value = value / 60;
-                        if(value > 1) {
-                            tmp = parseInt(value % 60) + 'h' + tmp;
-                            value = value / 24;
-                            if(value > 1) {
-                                tmp += parseInt(value % 24) + 'd' + tmp;
-                            }
-                        }
-                    }
-                    return tmp;
+                    var secs = Number(value);
+                    if (isNaN(secs) || secs < 0)
+                        return '—';
+                    secs = Math.floor(secs);
+                    var d = Math.floor(secs / 86400);
+                    var h = Math.floor((secs % 86400) / 3600);
+                    var m = Math.floor((secs % 3600) / 60);
+                    var s = secs % 60;
+                    var out = '';
+                    if (d > 0) out += d + 'd ';
+                    if (h > 0 || d > 0) out += h + 'h ';
+                    if (m > 0 || h > 0 || d > 0) out += m + 'm ';
+                    out += s + 's';
+                    return out;
                 },
                 stateIcon: function(state) {
-                    if (state == 'downloading')
-                        return {'icon': 'fa-arrow-circle-o-down', 'color': 'blue'};
-                    else if (state == 'paused')
-                        return {'icon': 'fa-pause-circle-o', 'color': 'green'};
-                    else if (state == 'finished')
-                        return {'icon': 'fa-check-circle-o', 'color': 'grey'};
+                    if (state === 'downloading')
+                        return {'icon': 'fa-arrow-circle-o-down', 'cls': 'state-downloading'};
+                    else if (state === 'paused')
+                        return {'icon': 'fa-pause-circle-o', 'cls': 'state-paused'};
+                    else if (state === 'finished')
+                        return {'icon': 'fa-check-circle-o', 'cls': 'state-finished'};
                     else
-                        return {'icon': 'fa-times-circle-o', 'color': 'red'};
+                        return {'icon': 'fa-times-circle-o', 'cls': 'state-invalid'};
                 },
                 tsToLocal: function(timeStamp) {
                     if (typeof timeStamp == 'undefined' || Number(timeStamp) < 10)
-                        return '';
+                        return '—';
 
                     var options = {
                         year: "numeric", month: "short", hour12: false,
@@ -261,8 +440,8 @@ var videoDownload = (function (Vue, extendAM){
                     });
                 },
                 showAlertToast(msg, theme) {
-                    this.$refs.toast.showToast(msg, {
-                        theme: theme,
+                    this.$refs.toast.showToast(String(msg), {
+                        theme: theme || 'info',
                         timeLife: this.timeLife,
                         closeBtn: this.closeBtn
                     });
@@ -276,15 +455,38 @@ var videoDownload = (function (Vue, extendAM){
         var url = that.tasksData.headPath + 'task/list';
         url = url + '?state=' + that.tasksData.status;
         Vue.http.get(url).then(function(res){
-            var resData = JSON.parse(res.body);
+            var resData;
+            try {
+                resData = JSON.parse(res.body);
+            } catch (e) {
+                return;
+            }
+            if (resData.status === 'error') return;
+
+            that.tasksData.fetchFailures = 0;
             that.tasksData.videoList = resData.detail;
             that.tasksData.stateCounter = resData.state_counter;
             that.tasksData.stateCounter.all = that.tasksData.stateCounter.downloading +
                                               that.tasksData.stateCounter.finished +
                                               that.tasksData.stateCounter.paused +
                                               that.tasksData.stateCounter.invalid;
+
+            // drop the selection if the task vanished (e.g. deleted elsewhere)
+            if (that.tasksData.selectedTid !== null) {
+                var found = resData.detail.some(function(v) {
+                    return v.tid === that.tasksData.selectedTid;
+                });
+                if (!found && that.tasksData.status === 'all') {
+                    that.tasksData.selectedTid = null;
+                    that.tasksData.taskDetails = {};
+                }
+            }
         }, function(err){
-            that.vm.showAlertToast('Network connection lost', 'error');
+            // only complain once per connectivity loss, not every 3 seconds
+            that.tasksData.fetchFailures++;
+            if (that.vm && that.tasksData.fetchFailures === 1) {
+                that.vm.showAlertToast('Lost connection to the server', 'error');
+            }
         });
     };
 

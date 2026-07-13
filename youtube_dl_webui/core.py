@@ -57,7 +57,11 @@ class WebMsgDispatcher(object):
             svr.put(cls.TaskExistenceErrorMsg)
             return
 
-        task = cls._task_mgr.start_task(tid)
+        try:
+            cls._task_mgr.start_task(tid)
+        except TaskError as e:
+            svr.put({'status': 'error', 'errmsg': e.msg})
+            return
 
         svr.put({'status': 'success', 'tid': tid})
 
@@ -168,7 +172,7 @@ class WebMsgDispatcher(object):
                 except TaskError as e:
                     errors.append([tid, e.msg])
         elif act == 'delete':
-            del_file = True if detail.get('del_file', 'false') == 'true' else False
+            del_file = str(detail.get('del_file', 'false')).lower() in ('1', 'true', 'yes')
             for tid in tids:
                 try:
                     cls._task_mgr.delete_task(tid, del_file)

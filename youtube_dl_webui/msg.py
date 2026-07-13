@@ -4,6 +4,7 @@
 import logging
 
 from multiprocessing import Process, Queue
+from queue import Empty
 
 from .utils import new_uuid
 
@@ -35,8 +36,11 @@ class CliMsg(MsgBase):
         payload = {'__uuid__': self.uuid, '__event__': event, '__data__': data}
         self.putQ.put(payload)
 
-    def get(self):
-        raw_msg = self.getQ.get()
+    def get(self, timeout=30):
+        try:
+            raw_msg = self.getQ.get(timeout=timeout)
+        except Empty:
+            return {'status': 'error', 'errmsg': 'Server timed out handling the request'}
         return raw_msg['__data__']
 
 class MsgMgr(object):
@@ -70,16 +74,28 @@ class MsgMgr(object):
         self._evnt_cb_dict[event] = (cb_func, arg)
 
     def run(self):
+        logger = logging.getLogger('ydl_webui')
         while True:
             raw_msg = self._svrQ.get()
-            uuid = raw_msg['__uuid__']
-            evnt = raw_msg['__event__']
-            data = raw_msg['__data__']
+            uuid = raw_msg.get('__uuid__')
+            evnt = raw_msg.get('__event__')
+            data = raw_msg.get('__data__')
 
-            cli = self._cli_dict[uuid]
+            cli = self._cli_dict.get(uuid)
+            if cli is None or evnt not in self._evnt_cb_dict:
+                logger.error('unknown message (uuid=%s, event=%s)', uuid, evnt)
+                continue
+
             cb  = self._evnt_cb_dict[evnt][0]
             arg = self._evnt_cb_dict[evnt][1]
 
             svr = SvrMsg(cli.putQ, cli.getQ)
-            cb(svr, evnt, data, arg)
+            try:
+                cb(svr, evnt, data, arg)
+            except Exception:
+                # a failing handler must never kill the dispatcher loop --
+                # that would leave every future web request hanging
+                logger.exception('unhandled error in event handler (event=%s)', evnt)
+                if cli.getQ is not None:
+                    svr.put({'status': 'error', 'errmsg': 'Internal Error'})
 

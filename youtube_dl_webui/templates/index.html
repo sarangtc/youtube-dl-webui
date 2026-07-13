@@ -1,8 +1,9 @@
 <!doctype html>
 <html>
     <head>
-        <title>youtube-dl-webUI</title>
+        <title>yt-dlp WebUI</title>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='font-awesome/css/font-awesome.min.css') }}">
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/global.css') }}">
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/modalComponent.css') }}">
@@ -11,7 +12,7 @@
     <body>
         <script type="text/x-template" id="modal-template">
             <transition name="modal">
-                <div class="modal-mask">
+                <div class="modal-mask" @click.self="$emit('close')">
                     <div class="modal-wrapper">
                         <div class="modal-container">
                             <div class="modal-header">
@@ -28,11 +29,11 @@
 
                             <div class="modal-footer">
                                 <slot name="footer">
-                                <button class="modal-default-button" @click="$emit('confirm')">
-                                    ok
+                                <button class="btn btn-primary" @click="$emit('confirm')">
+                                    OK
                                 </button>
-                                <button class="modal-default-button" @click="$emit('close')">
-                                    cancel
+                                <button class="btn" @click="$emit('close')">
+                                    Cancel
                                 </button>
                                 </slot>
                             </div>
@@ -43,65 +44,93 @@
         </script>
         <div id="videoWrapper">
             <header>
+                <div class="brand"><i class="fa fa-cloud-download" aria-hidden="true"></i>&nbsp;yt-dlp WebUI</div>
                 <div class="operBtns">
-                    <button @click="showAddTaskModal"><i class="fa fa-plus" aria-hidden="true"></i> Add</button>
-                    <button @click="showRemoveTaskModal"><i class="fa fa-minus" aria-hidden="true"></i> Remove</button>
-                    <button @click="pauseTask"><i class="fa fa-pause" aria-hidden="true"></i> Pause</button>
-                    <button @click="resumeTask"><i class="fa fa-play" aria-hidden="true"></i> Resume</button>
-                    <button @click="preference"><i class="fa fa-cog" aria-hidden="true"></i> Preference</button>
-                    <button @click="about" style="float:right"><i class="fa fa-question-circle" aria-hidden="true"></i> About</button>
+                    <button class="btn btn-primary" @click="showAddTaskModal" title="Add a new download task">
+                        <i class="fa fa-plus" aria-hidden="true"></i> Add
+                    </button>
+                    <button class="btn" @click="showRemoveTaskModal" :disabled="!hasSelection" title="Remove the selected task">
+                        <i class="fa fa-trash-o" aria-hidden="true"></i> Remove
+                    </button>
+                    <button class="btn" @click="pauseTask" :disabled="!hasSelection" title="Pause the selected task">
+                        <i class="fa fa-pause" aria-hidden="true"></i> Pause
+                    </button>
+                    <button class="btn" @click="resumeTask" :disabled="!hasSelection" title="Resume the selected task">
+                        <i class="fa fa-play" aria-hidden="true"></i> Resume
+                    </button>
+                    <button class="btn" @click="downloadFile" :disabled="!canDownload" title="Download the finished file">
+                        <i class="fa fa-download" aria-hidden="true"></i> File
+                    </button>
+                    <span class="spacer"></span>
+                    <button class="btn" @click="preference" title="Preferences">
+                        <i class="fa fa-cog" aria-hidden="true"></i> Preferences
+                    </button>
+                    <button class="btn" @click="about" title="About">
+                        <i class="fa fa-question-circle" aria-hidden="true"></i> About
+                    </button>
                 </div>
             </header>
             <div class="main-body">
-                <div w3-include-html="modalComponent.html"></div>
                 <div class="sidebar-wrapper">
-                    <div class="filter-caption">Filter <i class="fa fa-chevron-circle-left" style="float: right" aria-hidden="true"></i></div>
+                    <div class="filter-caption">Filter</div>
                     <div class="filter-list">
                         <ul>
-                          <li v-cloak @click="filterTasks('all')" v-bind:class="{'active': status === 'all'}"><i class="fa fa-globe" aria-hidden="true"></i>&nbsp;All&nbsp;({{"{{stateCounter.all}}"}})</li>
+                          <li v-cloak @click="filterTasks('all')" v-bind:class="{'active': status === 'all'}">
+                              <i class="fa fa-globe" aria-hidden="true"></i>&nbsp;All
+                              <span class="badge">{{"{{stateCounter.all}}"}}</span>
+                          </li>
                           <li v-cloak @click="filterTasks('downloading')" v-bind:class="{'active': status === 'downloading'}">
-                              <i class="fa fa-download" aria-hidden="true" style="color:blue"></i>&nbsp;Downloading&nbsp;({{"{{stateCounter.downloading}}"}})
+                              <i class="fa fa-download state-downloading" aria-hidden="true"></i>&nbsp;Downloading
+                              <span class="badge">{{"{{stateCounter.downloading}}"}}</span>
                           </li>
                           <li v-cloak @click="filterTasks('finished')" v-bind:class="{'active': status === 'finished'}">
-                              <i class="fa fa-check-circle" aria-hidden="true" style="color:grey"></i>&nbsp;Finished&nbsp;({{"{{stateCounter.finished}}"}})
+                              <i class="fa fa-check-circle state-finished" aria-hidden="true"></i>&nbsp;Finished
+                              <span class="badge">{{"{{stateCounter.finished}}"}}</span>
                           </li>
                           <li v-cloak @click="filterTasks('paused')" v-bind:class="{'active': status === 'paused'}">
-                              <i class="fa fa-pause-circle" aria-hidden="true" style="green"></i>&nbsp;Paused&nbsp;({{"{{stateCounter.paused}}"}})
+                              <i class="fa fa-pause-circle state-paused" aria-hidden="true"></i>&nbsp;Paused
+                              <span class="badge">{{"{{stateCounter.paused}}"}}</span>
                           </li>
                           <li v-cloak @click="filterTasks('invalid')" v-bind:class="{'active': status === 'invalid'}">
-                              <i class="fa fa-exclamation-triangle" aria-hidden="true" style="color:red"></i>&nbsp;Invalid&nbsp;({{"{{stateCounter.invalid}}"}})
+                              <i class="fa fa-exclamation-triangle state-invalid" aria-hidden="true"></i>&nbsp;Invalid
+                              <span class="badge">{{"{{stateCounter.invalid}}"}}</span>
                           </li>
                         </ul>
                     </div>
                 </div>
-                <div  class="videoList-wrapper">
+                <div class="videoList-wrapper">
                     <table class="videoList">
                         <thead>
                             <tr>
-                                <th width="30px">#</th>
-                                <th width="25ox">State</th>
+                                <th width="36px">#</th>
+                                <th width="44px">State</th>
                                 <th>Name</th>
-                                <th width="90px">Total Size</th>
+                                <th width="100px">Size</th>
                                 <th width="230px">Progress</th>
-                                <th width="100px">Down Speed</th>
-                                <th width="80px">ETA</th>
+                                <th width="110px">Speed</th>
+                                <th width="90px">ETA</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(video, index) in videoList" @click="selected(index)" :class="{'selected': currentSelected === index}">
-                                <td v-cloak>{{"{{index + 1}}"}}</td>
-                                <td v-clock style="font-size: 16px">
-                                    <i v-bind:style="{color: stateIcon(video.state).color}" v-bind:class="['fa', stateIcon(video.state).icon]" aria-hidden="true"></i>
+                            <tr v-if="videoList.length === 0" v-cloak>
+                                <td colspan="7" class="empty-state">
+                                    <i class="fa fa-inbox" aria-hidden="true"></i>
+                                    <p>No tasks here yet. Click <strong>Add</strong> to start a download.</p>
                                 </td>
-                                <td>{{"{{video.title}}"}}</td>
+                            </tr>
+                            <tr v-for="(video, index) in videoList" :key="video.tid" @click="selected(video)" @contextmenu.prevent="openContextMenu($event, video)" :class="{'selected': selectedTid === video.tid}">
+                                <td v-cloak>{{"{{index + 1}}"}}</td>
+                                <td v-cloak class="state-cell">
+                                    <i v-bind:class="['fa', stateIcon(video.state).icon, stateIcon(video.state).cls]" aria-hidden="true"></i>
+                                </td>
+                                <td v-cloak class="name-cell" :title="video.title">{{"{{video.title || video.url || '(fetching title…)'}}"}}</td>
                                 <td v-cloak>{{"{{bitsToHuman(video.total_bytes)}}"}}</td>
                                 <td v-cloak>
                                     <div class="progress-bar">
                                         <div class="string">{{"{{progressConv(video.state, video.percent)}}"}}</div>
                                         <div class="bar-container">
-                                            <div class="bar" :style="{width:video.percent}"></div>
+                                            <div class="bar" :class="'bar-' + video.state" :style="{width: progressWidth(video)}"></div>
                                         </div>
-                                    </div>
                                     </div>
                                 </td>
                                 <td v-cloak>{{"{{speedConv(video.state, video.speed)}}"}}</td>
@@ -112,85 +141,112 @@
                 </div>
             <modal v-if="showModal" @close="showModal = false" @confirm="execFunction" v-cloak>
                 <template v-if="modalType === 'updatePreference'">
-                    <div slot="header">Preference</div>
+                    <div slot="header">Preferences</div>
                     <div slot="body" v-cloak style="display:block">
-                        <div style="text-align:center;">
-                            <hr class="left-hr" /><span style="font-weight: bold;">General</span><hr class="right-hr" />
+                        <div class="form-section">General</div>
+                        <div class="form-row">
+                            <label>Download Path</label><input type="text" ref="dl-path" v-model="modalData.preference.general.download_dir" @keyup.esc="showModal = false"/>
                         </div>
-                        <div>
-                            <label>Download Path:</label><input type="text" ref="dl-path" v-model="modalData.preference.general.download_dir" v-cloak @keyup.esc="showModal = false"/>
+                        <div class="form-row">
+                            <label>Database Path</label><input type="text" ref="db-path" v-model="modalData.preference.general.db_path" @keyup.esc="showModal = false"/>
                         </div>
-                        <div>
-                            <label>Database Path:</label><input type="text" ref="db-path" v-model="modalData.preference.general.db_path" v-cloak @keyup.esc="showModal = false"/>
+                        <div class="form-row">
+                            <label>Log Size</label><input type="text" ref="log-size" v-model="modalData.preference.general.log_size" @keyup.esc="showModal = false"/>
                         </div>
-                        <div>
-                            <label>Log Size:</label><input type="text" ref="log-size" v-model="modalData.preference.general.log_size" v-cloak @keyup.esc="showModal = false"/>
+                        <div class="form-section">yt-dlp options</div>
+                        <div class="form-row">
+                            <label>Format</label><input type="text" ref="format" v-model="modalData.preference.youtube_dl.format" @keyup.esc="showModal = false"/>
                         </div>
-                        <div style="text-align:center;">
-                            <hr class="left-hr" /><span style="font-weight: bold;">youtube-dl options</span><hr class="right-hr" />
+                        <div class="form-row">
+                            <label>Proxy</label><input type="text" ref="proxy" v-model="modalData.preference.youtube_dl.proxy" placeholder="e.g. socks5://127.0.0.1:1080" @keyup.esc="showModal = false"/>
                         </div>
-                        <div>
-                            <label>Format:</label><input type="text" ref="format" v-model="modalData.preference.youtube_dl.format" v-cloak @keyup.esc="showModal = false"/>
+                        <div class="form-row">
+                            <label>Output Template</label><input type="text" ref="outtmpl" v-model="modalData.preference.youtube_dl.outtmpl" placeholder="%(title)s.%(ext)s" @keyup.esc="showModal = false"/>
                         </div>
-                        <div>
-                            <label>Proxy:</label><input type="text" ref="proxy" v-model="modalData.preference.youtube_dl.proxy" v-cloak @keyup.esc="showModal = false"/>
-                        </div>
-                        <div>
-                            <label>Out Tmpl:</label><input type="text" ref="outtmpl" v-model="modalData.preference.youtube_dl.outtmpl" v-cloak @keyup.esc="showModal = false"/>
-                        </div>
-                        <div>
-                            <label>Rate Limit:</label><input type="text" ref="ratelimit" v-model="modalData.preference.youtube_dl.ratelimit" v-cloak @keyup.esc="showModal = false"/>
+                        <div class="form-row">
+                            <label>Rate Limit (B/s)</label><input type="text" ref="ratelimit" v-model="modalData.preference.youtube_dl.ratelimit" @keyup.esc="showModal = false"/>
                         </div>
                     </div>
                     <div slot="footer">
-                        <button class="modal-default-button" @click="updatePreference" style="width:auto;">save</button>
-                        <button class="modal-default-button" @click="showModal = false" style="width:auto;">cancel</button>
-                    </div>                    
+                        <button class="btn btn-primary" @click="updatePreference">Save</button>
+                        <button class="btn" @click="showModal = false">Cancel</button>
+                    </div>
                 </template>
                 <template v-if="modalType === 'about'">
                     <div slot="header">About</div>
                     <div slot="body" v-cloak style="display:block">
-                        <div style="justify-content: left;">
-                            <span class="caption">Version:</span>rolling
+                        <div class="form-row">
+                            <span class="caption">Version:</span><span>{{ version }}</span>
                         </div>
-                        <div style="justify-content: left;">
-                            <span class="caption">Github:</span><a href="https://github.com/d0u9/youtube-dl-webui">https://github.com/d0u9/youtube-dl-webui</a>
+                        <div class="form-row">
+                            <span class="caption">GitHub:</span><a href="https://github.com/d0u9/youtube-dl-webui" target="_blank" rel="noopener">github.com/d0u9/youtube-dl-webui</a>
                         </div>
-                        <div style="justify-content: left;">
-                            <span class="caption">License:</span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html">GPL-2.0</a>
+                        <div class="form-row">
+                            <a class="caption" href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp:</a>
+                            <span class="ydl-status" v-cloak>
+                                <template v-if="ydl.checking">Checking…</template>
+                                <template v-else>
+                                    <span>{{"{{ydl.installed || 'unknown'}}"}}</span>
+                                    <span v-if="ydl.updateAvailable" class="badge-update">v{{"{{ydl.latest}}"}} available</span>
+                                    <span v-else-if="ydl.latest" class="badge-uptodate">up to date</span>
+                                </template>
+                            </span>
+                            <button v-if="ydl.updateAvailable || ydl.updating" class="btn btn-sm btn-primary" @click="updateYdl" :disabled="ydl.updating" v-cloak>
+                                <i class="fa" :class="ydl.updating ? 'fa-spinner fa-spin' : 'fa-arrow-circle-up'" aria-hidden="true"></i>
+                                {{"{{ydl.updating ? 'Updating…' : 'Update'}}"}}
+                            </button>
+                        </div>
+                        <div class="form-row">
+                            <span class="caption">License:</span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html" target="_blank" rel="noopener">GPL-2.0</a>
                         </div>
                     </div>
                     <div slot="footer">
-                        <button class="modal-default-button" @click="showModal = false">OK</button>
+                        <button class="btn btn-primary" @click="showModal = false">OK</button>
                     </div>
                 </template>
                 <template v-if="modalType === 'removeTask'">
                     <div slot="header">Remove Task</div>
                     <div slot="body" v-cloak style="display:block">
-                        <p>Are you sure you want to delete the task?</p>
+                        <p>Remove <strong>{{"{{selectedTask ? (selectedTask.title || selectedTask.url) : 'this task'}}"}}</strong>?</p>
+                        <p class="hint">“Remove with file” also deletes the downloaded file from disk.</p>
                     </div>
                     <div slot="footer">
-                        <button class="modal-default-button" @click="showModal = false">cancel</button>
-                        <button class="modal-default-button" @click="removeData" style="width:auto;">remove with data</button>
-                        <button class="modal-default-button" @click="removeTask" style="width:auto;">remove task</button>
+                        <button class="btn btn-danger" @click="removeData">Remove with file</button>
+                        <button class="btn btn-primary" @click="removeTask(false)">Remove task</button>
+                        <button class="btn" @click="showModal = false">Cancel</button>
                     </div>
                 </template>
                 <template v-if="modalType === 'addTask'">
                     <div slot="header">Add Task</div>
                     <div slot="body" v-cloak style="display:block">
-                        <div>
-                            <label>URL:</label><input type="text" ref="url" v-model="modalData.add.url" v-cloak @keyup.enter="addTask" @keyup.esc="showModal = false"/>
+                        <div class="form-row">
+                            <label>URL</label><input type="text" ref="url" v-model="modalData.add.url" placeholder="https://…" @keyup.enter="addTask" @keyup.esc="showModal = false"/>
                         </div>
-                        <div style="text-align:center;">
-                            <hr class="left-hr" /><span style="font-weight: bold;">youtube-dl options</span><hr class="right-hr" />
+                        <div class="form-row">
+                            <label>Quality</label>
+                            <select v-model="modalData.add.preset">
+                                <option v-for="p in formatPresets" :value="p.value">{{"{{p.label}}"}}</option>
+                            </select>
                         </div>
-                        <div>
-                            <label>Format:</label><input type="text" ref="format" v-model="modalData.add.ydl_opts.format" v-cloak @keyup.esc="showModal = false"/>
+                        <div class="form-row" v-if="modalData.add.preset === 'custom'">
+                            <label>Format</label><input type="text" ref="format" v-model="modalData.add.customFormat" placeholder="yt-dlp format selector, e.g. bv*+ba/b" @keyup.enter="addTask" @keyup.esc="showModal = false"/>
                         </div>
+                    </div>
+                    <div slot="footer">
+                        <button class="btn btn-primary" @click="addTask">Add</button>
+                        <button class="btn" @click="showModal = false">Cancel</button>
                     </div>
                 </template>
             </modal>
             <vue-toast ref='toast'></vue-toast>
+            <ul v-if="contextMenu.visible" ref="contextMenu" class="context-menu"
+                :style="{top: contextMenu.y + 'px', left: contextMenu.x + 'px'}" @click.stop v-cloak>
+                <li @click="ctxPause"><i class="fa fa-pause" aria-hidden="true"></i> Pause</li>
+                <li @click="ctxResume"><i class="fa fa-play" aria-hidden="true"></i> Resume</li>
+                <li :class="{disabled: !canDownload}" @click="ctxDownload"><i class="fa fa-download" aria-hidden="true"></i> Download</li>
+                <li class="separator"></li>
+                <li class="danger" @click="ctxRemove"><i class="fa fa-trash-o" aria-hidden="true"></i> Remove…</li>
+            </ul>
             </div>
             <footer>
                 <div class="info-tabs">
@@ -199,13 +255,15 @@
                     </ul>
                 </div>
                 <div class="tabpane">
+                    <div v-if="!hasSelection" class="tab-empty" v-cloak>Select a task to see its details.</div>
+                    <template v-else>
                     <div v-show="showTab === 'Status'" v-cloak>
                         <dl>
                             <dt>Title:</dt><dd v-bind:title="taskDetails.title" style="overflow:auto; white-space:normal">{{"{{taskDetails.title}}"}}</dd>
                             <dt>Extension:</dt><dd>{{"{{taskDetails.ext}}"}}</dd>
                             <dt>Format:</dt><dd>{{"{{taskDetails.format}}"}}</dd>
-                            <dt>Create Time:</dt><dd>{{"{{tsToLocal(taskDetails.create_time)}}"}}</dd>
-                            <dt>Finish Time:</dt><dd>{{"{{tsToLocal(taskDetails.finish_time)}}"}}</dd>
+                            <dt>Created:</dt><dd>{{"{{tsToLocal(taskDetails.create_time)}}"}}</dd>
+                            <dt>Finished:</dt><dd>{{"{{tsToLocal(taskDetails.finish_time)}}"}}</dd>
                             <dt>File Name:</dt><dd style="overflow:auto; white-space:normal;">{{"{{taskDetails.filename}}"}}</dd>
                         </dl>
                     </div>
@@ -217,11 +275,11 @@
                                 </div>
                                 <div class="row">
                                     <span class="key">URL:</span>
-                                    <span class="val"><a v-bind:title="taskDetails.url" :href="taskDetails.url" target="_blank">{{"{{taskDetails.url}}"}}</a></span>
+                                    <span class="val"><a v-bind:title="taskDetails.url" :href="taskDetails.url" target="_blank" rel="noopener">{{"{{taskDetails.url}}"}}</a></span>
                                 </div>
                                 <div class="row auto-height">
                                     <span class="key">Thumbnail:</span>
-                                    <span class="val" style="overflow-y:hidden; height:92px;"><img height="92px" :src="taskDetails.thumbnail"></span>
+                                    <span class="val thumb"><img v-if="taskDetails.thumbnail" :src="taskDetails.thumbnail" alt="thumbnail"></span>
                                 </div>
                             </div>
                             <div class="col">
@@ -231,31 +289,30 @@
                                 </div>
                             </div>
                             <div class="col" style="flex-grow: 1; border: none">
-                                <div class="row"><span class="key">Duration:</span><span class="val">{{"{{taskDetails.duration}}"}}</span></div>
-                                <div class="row"><span class="key">View Count:</span><span class="val">{{"{{taskDetails.view_count}}"}}</span></div>
-                                <div class="row"><span class="key">Like Count:</span><span class="val">{{"{{taskDetails.like_count}}"}}</span></div>
-                                <div class="row"><span class="key">Dislike Count:</span><span class="val">{{"{{taskDetails.dislike_count}}"}}</span></div>
-                                <div class="row"><span class="key">Average Rating:</span><span class="val">{{"{{taskDetails.average_rating}}"}}</span></div>
+                                <div class="row"><span class="key">Duration:</span><span class="val">{{"{{secondsToHuman(taskDetails.duration)}}"}}</span></div>
+                                <div class="row"><span class="key">Views:</span><span class="val">{{"{{taskDetails.view_count}}"}}</span></div>
+                                <div class="row"><span class="key">Likes:</span><span class="val">{{"{{taskDetails.like_count}}"}}</span></div>
                             </div>
                     </div>
                     <div v-show="showTab === 'Log'" class="log-container" v-cloak>
                         <table>
                             <thead>
                                 <tr>
-                                    <th style="width: 125px">Time</th>
+                                    <th style="width: 160px">Time</th>
                                     <th style="width: 90px">Type</th>
-                                    <th style="text-align: center; padding-left: 5px;">Message</th>
+                                    <th style="text-align: left; padding-left: 5px;">Message</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="log in taskDetails.log" class="log" v-cloak>
                                     <td>{{"{{tsToLocal(log.time)}}"}}</td>
-                                    <td>{{"{{log.type}}"}}</td>
+                                    <td><span class="log-type" :class="'log-' + log.type">{{"{{log.type}}"}}</span></td>
                                     <td style="text-align: left; padding-left: 5px;">{{"{{log.msg}}"}}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+                    </template>
                 </div>
             </footer>
         </div>

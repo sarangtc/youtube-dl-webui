@@ -2,12 +2,15 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
+
+__version__ = '1.0.0'
+
 from argparse import ArgumentParser
 
 from .core import Core
 
 def getopt(argv):
-    parser = ArgumentParser(description='Another webui for youtube-dl')
+    parser = ArgumentParser(description='A web UI for yt-dlp')
 
     parser.add_argument('-c', '--config', metavar="CONFIG_FILE", help="config file")
     parser.add_argument('--host', metavar="ADDR", help="the address server listens on")

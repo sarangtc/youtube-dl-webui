@@ -26,3 +26,38 @@ Lot of updates here in this new version.
 ## 0.2.1
 
 Some bugs fix.
+
+## 1.0.0
+
+Major stability and UI/UX overhaul.
+
+- Migrate from the unmaintained `youtube-dl` to `yt-dlp`.
+- Fix a dispatcher bug where a failing event handler would hang every future
+  web request.
+- Fix mutable-default-argument bugs in the database layer that made every
+  task record the same stale timestamp.
+- Fix a crash in task detail lookups and several other silent failures
+  (bad URLs, non-numeric config values, empty delete-with-file prefixes).
+- Add a `GET /download/{tid}` endpoint to serve completed files.
+- Preference updates now merge into the existing configuration instead of
+  wiping out sections that weren't part of the update.
+- The database's parent directory is now created automatically on first run.
+- Redesign the web UI: modern styling, quality presets on the Add dialog,
+  disabled/enabled toolbar buttons based on selection and task state, an
+  empty-state message, and clearer error/success toasts.
+- Add a right-click context menu on task rows (Pause, Resume, Download, Remove).
+- The About modal now shows the installed yt-dlp version and checks PyPI for
+  a newer release, with a one-click Update button that appears only when an
+  update is actually available.
+- Fix `dockerfile/Dockerfile`: it built from a remote GitHub zip snapshot
+  instead of the local working tree, installed `youtube-dl` instead of
+  `yt-dlp`, and GPG-verified `gosu` against a keyserver that's been dead
+  since 2021 (build would hang/fail). Now builds from the local checkout,
+  installs `gosu` and `ffmpeg` via apt, and adds a `docker-compose.yml` with
+  a single bind-mounted `/data` directory that auto-seeds its own config on
+  first run.
+- Fix a startup crash under any restricted-permission deployment (e.g. the
+  new Docker image running as a non-root user via `gosu`): `logging.json`'s
+  file handlers used relative paths that resolved against whatever the
+  process's starting CWD happened to be, which isn't always writable. Log
+  files now always resolve against the OS temp directory.

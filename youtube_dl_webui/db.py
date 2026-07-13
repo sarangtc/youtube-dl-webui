@@ -25,6 +25,15 @@ class DataBase(object):
             self.logger.error('The db_path: %s is not writable', db_path)
             raise Exception('The db_path is not valid')
 
+        # make sure the directory holding the database exists; the default
+        # path points into a directory that does not exist on a fresh setup
+        db_dir = os.path.dirname(os.path.abspath(db_path))
+        try:
+            os.makedirs(db_dir, exist_ok=True)
+        except OSError as e:
+            self.logger.error('Cannot create database dir %s: %s', db_dir, e)
+            raise Exception('The db_path is not valid')
+
         # first time to create db
         if not os.path.exists(db_path):
             conn = sqlite3.connect(db_path)
@@ -67,9 +76,11 @@ class DataBase(object):
                         v.append(val)
                 else:
                     self.logger.warning('field_name(%s) does not exist' %(name))
-            else:
-                f = f[:-1]
 
+            if len(v) == 0:
+                continue
+
+            f = f[:-1]
             v.append(tid)
             self.db.execute('UPDATE {} SET {} WHERE tid=(?)'.format(table, f), tuple(v))
 
@@ -120,7 +131,8 @@ class DataBase(object):
 
         return tid
 
-    def start_task(self, tid, start_time=time()):
+    def start_task(self, tid, start_time=None):
+        start_time = time() if start_time is None else start_time
         state = state_index['downloading']
         db_data =   {
                         'task_info': {'state': state},
@@ -129,8 +141,9 @@ class DataBase(object):
                     }
         self.update(tid, db_data)
 
-    def pause_task(self, tid, elapsed, pause_time=time()):
+    def pause_task(self, tid, elapsed, pause_time=None):
         self.logger.debug("db pause_task()")
+        pause_time = time() if pause_time is None else pause_time
         state = state_index['paused']
         db_data =   {
                         'task_info': {'state': state},
@@ -144,8 +157,9 @@ class DataBase(object):
                     }
         self.update(tid, db_data)
 
-    def finish_task(self, tid, elapsed, finish_time=time()):
+    def finish_task(self, tid, elapsed, finish_time=None):
         self.logger.debug("db finish_task()")
+        finish_time = time() if finish_time is None else finish_time
         state = state_index['finished']
         db_data =   {
                         'task_info': {  'state': state,
@@ -162,8 +176,9 @@ class DataBase(object):
                     }
         self.update(tid, db_data)
 
-    def halt_task(self, tid, elapsed, halt_time=time()):
+    def halt_task(self, tid, elapsed, halt_time=None):
         self.logger.debug('db halt_task()')
+        halt_time = time() if halt_time is None else halt_time
         state = state_index['invalid']
         db_data =   {
                         'task_info': {  'state': state,
@@ -274,17 +289,18 @@ class DataBase(object):
         self.update(tid, {'task_status': {'log': log_str}})
 
     def progress_update(self, tid, d, elapsed):
-        self.logger.debug("update filename=%s, tmpfilename=%s" %(d['filename'], d['tmpfilename']))
+        self.logger.debug("update filename=%s, tmpfilename=%s"
+                          %(d.get('filename', ''), d.get('tmpfilename', '')))
 
         db_data =   {
-                        'percent':              d['_percent_str'],
-                        'filename':             d['filename'],
-                        'tmpfilename':          d['tmpfilename'],
-                        'downloaded_bytes':     d['downloaded_bytes'],
-                        'total_bytes':          d['total_bytes'],
-                        'total_bytes_estmt':    d['total_bytes_estimate'],
-                        'speed':                d['speed'],
-                        'eta':                  d['eta'],
+                        'percent':              d.get('_percent_str', '0.0%'),
+                        'filename':             d.get('filename', ''),
+                        'tmpfilename':          d.get('tmpfilename', ''),
+                        'downloaded_bytes':     d.get('downloaded_bytes', 0) or 0,
+                        'total_bytes':          d.get('total_bytes', 0) or 0,
+                        'total_bytes_estmt':    d.get('total_bytes_estimate', 0) or 0,
+                        'speed':                d.get('speed', 0) or 0,
+                        'eta':                  d.get('eta', 0) or 0,
                         'elapsed':              elapsed,
                     }
         self.update(tid, {'task_status': db_data})

@@ -216,17 +216,25 @@ class TaskManager(object):
             while ext != '':
                 file_wo_ext, ext = os.path.splitext(file_wo_ext)
 
+            # never remove files on an empty prefix -- that would match
+            # every file in the download directory
+            if len(file_wo_ext) == 0:
+                return
+
             for fname in os.listdir(os.getcwd()):
                 if fname.startswith(file_wo_ext):
                     self.logger.debug('delete file: %s' %(fname))
-                    os.remove(os.path.join(os.getcwd(), fname))
+                    try:
+                        os.remove(os.path.join(os.getcwd(), fname))
+                    except OSError as e:
+                        self.logger.warning('could not delete file %s: %s', fname, e)
 
     def query(self, tid, exerpt=True):
         db_ret = self._db.query_task(tid)
 
         detail = {}
         if exerpt:
-            detail = {k: db_ret[k] for k in ret if k in self.ExerptKeys}
+            detail = {k: db_ret[k] for k in db_ret if k in self.ExerptKeys}
         else:
             detail = db_ret
 
@@ -274,10 +282,11 @@ class TaskManager(object):
         task = self._tasks_dict[tid]
         task.progress_update(data)
 
-        if 'total_bytes' in data:
+        if 'total_bytes' in data and data['total_bytes']:
             data['total_bytes_estmt'] = data['total_bytes']
         else:
-            data['total_bytes'] = '0'
+            # fall back to yt-dlp's estimate so the UI can still show a size
+            data['total_bytes'] = data.get('total_bytes_estimate', 0) or 0
 
         self._db.progress_update(tid, data, task.elapsed)
 
@@ -288,7 +297,7 @@ class TaskManager(object):
             try:
                 self.start_task(t)
             except TaskError as e:
-                self.logger.warn("Task %s is in downloading or finished state", tid)
+                self.logger.warning("Task %s is in downloading or finished state", t)
             except TaskInexistenceError:
                 self.logger.error('Task does not exist')
 
