@@ -27,15 +27,19 @@ to users who prefer graphical interfaces over command-line tools.
 - **Right-click Context Menu**: Right-click any task for quick access to Pause, Resume,
   Download, and Remove without selecting it first
 - **Task Filtering**: Filter tasks by status (All, Downloading, Finished, Paused, Invalid)
-- **Detailed Information**: View comprehensive task details including thumbnails, descriptions, and logs
+- **Detailed Information**: View comprehensive task details including thumbnails, descriptions, and logs.
+  Thumbnails are proxied through the server rather than loaded directly by the browser (see
+  [Network Requirements](#network-requirements))
 - **Real-time Updates**: Automatic refresh of task status and progress every 3 seconds
 - **Toast Notifications**: Clear success/error feedback for every action
 
 ### Configuration
 - **Web-based Settings**: Configure download paths, formats, and other options through the UI
 - **Custom HTML Support**: Add custom HTML content to the About modal
-- **Format Presets**: Pre-defined format options for common use cases (best, 1080p, 720p,
-  480p, audio-only, or a custom yt-dlp format selector)
+- **Format Presets**: A dropdown of format options (best, 1080p, 720p, 480p, audio-only,
+  or a custom yt-dlp format selector) in both the Add Task and Preferences dialogs.
+  The preset list itself is server-configurable via `format_options` in your config
+  file — sensible defaults ship out of the box
 - **Persistent Settings**: All preferences are saved and restored between sessions;
   saving a partial change (e.g. from the Preferences dialog) no longer resets the
   sections you didn't touch
@@ -57,6 +61,32 @@ to users who prefer graphical interfaces over command-line tools.
 ## Screenshot
 
 ![screenshot1](screen_shot/1.gif)
+
+## Network Requirements
+
+**The server needs internet access; the browser using the UI does not.**
+Everything the browser loads — the page itself, CSS/JS/fonts, and video
+thumbnails — is served from this app's own origin. The only things fetched
+directly by the browser are the GitHub/yt-dlp/license links in the About
+modal, and only if you click them; nothing auto-loads from them.
+
+Specifically:
+- **Video thumbnails** are fetched by the *server* (`GET /thumbnail/{tid}`)
+  and streamed to the browser — the browser never requests the original
+  CDN URL (e.g. `i.ytimg.com`) directly. This matters if your browser is on
+  an intranet with no direct path to the public internet, while the server
+  itself does have one.
+- **yt-dlp version checks** (the About modal's "up to date" / "update
+  available" indicator) also run entirely server-side — see
+  [Updating yt-dlp](#updating-yt-dlp).
+- **Downloading videos** obviously requires the *server* to reach the
+  source site.
+
+If your browser truly cannot reach the server for some other reason (e.g. a
+strict egress-only intranet where even the server's own origin is
+unreachable from client machines), that's a network/firewall configuration
+issue outside this app's control — the app itself makes no assumption that
+the browser has internet access.
 
 ## Prerequisites
 

@@ -9,12 +9,13 @@ import sys
 import time
 
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 
 from flask import Flask
 from flask import render_template
 from flask import request
 from flask import send_from_directory
+from flask import Response
 from multiprocessing import Process
 from threading import Lock
 
@@ -183,6 +184,35 @@ def download_file(tid):
                            'errmsg': 'File not found on disk'}), 404
 
     return send_from_directory(dl_dir, filename, as_attachment=True)
+
+
+@app.route('/thumbnail/<tid>', methods=['GET'])
+def get_thumbnail(tid):
+    """Proxy a task's thumbnail through the server.
+
+    The browser using this UI may be on an intranet with no direct internet
+    access, so it can't load thumbnail URLs (e.g. ytimg.com) itself -- the
+    server fetches the image (it already needs internet access to run
+    yt-dlp) and streams the bytes back.
+    """
+    ret = msg_request('query', {'tid': tid, 'exerpt': False})
+    if ret.get('status') != 'success':
+        return '', 404
+
+    thumb_url = ret.get('detail', {}).get('thumbnail', '')
+    if not thumb_url:
+        return '', 404
+
+    try:
+        req = Request(thumb_url, headers={'User-Agent': 'Mozilla/5.0 (compatible; yt-dlp-webui)'})
+        with urlopen(req, timeout=8) as resp:
+            data = resp.read()
+            content_type = resp.headers.get('Content-Type') or 'image/jpeg'
+    except (URLError, OSError, ValueError):
+        return '', 502
+
+    return Response(data, mimetype=content_type,
+                     headers={'Cache-Control': 'public, max-age=86400'})
 
 
 @app.route('/config', methods=['GET', 'POST'])

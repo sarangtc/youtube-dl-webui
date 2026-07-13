@@ -61,3 +61,11 @@ Major stability and UI/UX overhaul.
   file handlers used relative paths that resolved against whatever the
   process's starting CWD happened to be, which isn't always writable. Log
   files now always resolve against the OS temp directory.
+- Restore server-configurable format presets (dropdown + custom syntax
+  field, in both Add Task and Preferences) and the About modal's custom
+  HTML field — both existed on a different branch that got swapped out
+  mid-development and were missing from the redesigned UI.
+- Video thumbnails are now proxied through the server (`GET
+  /thumbnail/{tid}`) instead of being loaded directly by the browser, so the
+  UI works when the browser has no direct internet access but the server
+  does (e.g. an intranet-only deployment).

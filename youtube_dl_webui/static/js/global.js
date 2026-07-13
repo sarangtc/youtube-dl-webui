@@ -10,21 +10,15 @@ var videoDownload = (function (Vue, extendAM){
         tablist: ['Status', 'Details', 'Log'],
         showTab: 'Status',
         stateCounter: { all: 0, downloading: 0, finished: 0, paused: 0, invalid: 0},
-        formatPresets: [
-            { label: 'Default (server config)',        value: '' },
-            { label: 'Best video + audio',             value: 'bestvideo*+bestaudio/best' },
-            { label: 'Best MP4',                       value: 'best[ext=mp4]/best' },
-            { label: '1080p',                          value: 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best' },
-            { label: '720p',                           value: 'bestvideo[height<=720]+bestaudio/best[height<=720]/best' },
-            { label: '480p',                           value: 'bestvideo[height<=480]+bestaudio/best[height<=480]/best' },
-            { label: 'Audio only (m4a)',               value: 'bestaudio[ext=m4a]/bestaudio' },
-            { label: 'Custom…',                        value: 'custom' }
-        ],
+        // populated from the server's 'format_options' config (see
+        // loadServerConfig) so presets are configurable without a redeploy
+        formatOptions: [],
+        aboutCustomHtml: '',
         modalData: {
-            add: { url: '', preset: '', customFormat: '' },
+            add: { url: '', ydl_opts: { format: '' } },
             preference: {
                 youtube_dl: { format: '', proxy: '', ratelimit: '', outtmpl: '' },
-                general: { download_dir: '', db_path: '', log_size: '' }
+                general: { download_dir: '', db_path: '', log_size: '', about_custom_html: '' }
             },
         },
         selectedTid: null,
@@ -67,6 +61,7 @@ var videoDownload = (function (Vue, extendAM){
             mounted: function () {
                 this.resetOptions();
                 setInterval(videoDownload.timeOut, 3000);
+                this.loadServerConfig(true);
 
                 // clicking/scrolling anywhere outside the context menu closes it
                 var _self = this;
@@ -80,8 +75,7 @@ var videoDownload = (function (Vue, extendAM){
             methods: {
                 showAddTaskModal: function(){
                     this.modalData.add.url = '';
-                    this.modalData.add.preset = '';
-                    this.modalData.add.customFormat = '';
+                    this.modalData.add.ydl_opts.format = '';
                     this.showModal = true;
                     this.modalType = 'addTask';
                     this.$nextTick(function(){
@@ -137,10 +131,8 @@ var videoDownload = (function (Vue, extendAM){
                     }
 
                     var ydl_opts = {};
-                    var fmt = _self.modalData.add.preset === 'custom'
-                            ? _self.modalData.add.customFormat.trim()
-                            : _self.modalData.add.preset;
-                    if (fmt !== '') ydl_opts.format = fmt;
+                    var fmt = (_self.modalData.add.ydl_opts.format || '').trim();
+                    if (fmt !== '' && fmt !== '__CUSTOM__') ydl_opts.format = fmt;
 
                     Vue.http.post(url, {url: taskUrl, ydl_opts: ydl_opts}, {emulateJSON: false}).then(function(res){
                         var ret = _self.parseResponse(res);
@@ -164,6 +156,7 @@ var videoDownload = (function (Vue, extendAM){
                             _self.showAlertToast(ret.errmsg || 'Could not save preferences', 'error');
                             return;
                         }
+                        _self.aboutCustomHtml = _self.modalData.preference.general.about_custom_html || '';
                         _self.showModal = false;
                         _self.showAlertToast('Preferences saved', 'success');
                     }, function(err){
@@ -227,6 +220,11 @@ var videoDownload = (function (Vue, extendAM){
                         _self.showAlertToast(_self.errText(err), 'error');
                     });
                 },
+                thumbnailSrc: function(detail){
+                    // proxied through the server -- the browser using this UI
+                    // may have no direct internet access itself
+                    return this.headPath + 'thumbnail/' + detail.tid;
+                },
                 downloadFile: function(){
                     if (!this.requireSelection()) return;
                     if (this.selectedTask.state !== 'finished') {
@@ -274,32 +272,87 @@ var videoDownload = (function (Vue, extendAM){
                     });
                 },
                 preference: function() {
-                    var _self = this;
-                    var url = _self.headPath + 'config';
-
                     this.showModal = true;
                     this.modalType = 'updatePreference';
+                    this.loadServerConfig();
+                },
+                loadServerConfig: function(silent) {
+                    var _self = this;
+                    var url = _self.headPath + 'config';
                     Vue.http.get(url).then(function(res) {
                         var ret = _self.parseResponse(res);
                         if (ret.status === 'error' || !ret.config) {
-                            _self.showAlertToast(ret.errmsg || 'Could not load configuration', 'error');
+                            if (!silent) _self.showAlertToast(ret.errmsg || 'Could not load configuration', 'error');
                             return;
                         }
                         var config = ret.config;
                         _self.modalData.preference.general.download_dir = config.general.download_dir;
                         _self.modalData.preference.general.db_path = config.general.db_path;
                         _self.modalData.preference.general.log_size = config.general.log_size;
+                        _self.modalData.preference.general.about_custom_html = config.general.about_custom_html || '';
                         _self.modalData.preference.youtube_dl.format = config.youtube_dl.format;
                         _self.modalData.preference.youtube_dl.proxy = config.youtube_dl.proxy;
                         _self.modalData.preference.youtube_dl.ratelimit = config.youtube_dl.ratelimit;
                         _self.modalData.preference.youtube_dl.outtmpl = config.youtube_dl.outtmpl;
+
+                        _self.aboutCustomHtml = config.general.about_custom_html || '';
+                        if (config.format_options && config.format_options.format_options) {
+                            _self.formatOptions = config.format_options.format_options;
+                        }
                     }, function(err){
-                        _self.showAlertToast(_self.errText(err), 'error');
+                        if (!silent) _self.showAlertToast(_self.errText(err), 'error');
                     });
                 },
                 selected: function(video){
                     this.selectedTid = video.tid;
                     this.getTaskInfoById();
+                },
+                // -- format preset picker: shared by the Preferences and Add
+                // Task modals ('preference' / 'add') --
+                formatModel: function(target) {
+                    return target === 'preference'
+                        ? this.modalData.preference.youtube_dl
+                        : this.modalData.add.ydl_opts;
+                },
+                getFormatPresets: function(target) {
+                    var baseOptions = this.formatOptions || [];
+                    if (target !== 'add') return baseOptions;
+
+                    var preferencesFormat = this.modalData.preference.youtube_dl.format;
+                    var label = 'Use preferences format';
+                    if (preferencesFormat && preferencesFormat.trim() !== '') {
+                        var match = baseOptions.filter(function(p){ return p.value === preferencesFormat; })[0];
+                        label = match ? 'Use preferences format (' + match.label + ')' : 'Use preferences format (custom)';
+                    }
+                    return [{ label: label, value: '__PREFERENCES__' }].concat(baseOptions);
+                },
+                getSelectedFormatPreset: function(target) {
+                    var currentFormat = this.formatModel(target).format;
+                    var presets = this.getFormatPresets(target);
+                    var match = presets.filter(function(p){ return p.value === currentFormat; })[0];
+                    if (match) return match.value;
+                    return (currentFormat && currentFormat.trim() !== '') ? '__CUSTOM__' : '';
+                },
+                selectFormatPreset: function(preset, target) {
+                    var _self = this;
+                    if (preset === '__CUSTOM__') {
+                        this.$nextTick(function(){
+                            if (_self.$refs.format) _self.$refs.format.focus();
+                        });
+                        return;
+                    }
+                    if (target === 'add' && preset === '__PREFERENCES__') {
+                        this.modalData.add.ydl_opts.format = this.modalData.preference.youtube_dl.format || '';
+                        return;
+                    }
+                    this.formatModel(target).format = preset;
+                },
+                clearFormat: function(target) {
+                    this.formatModel(target).format = '';
+                },
+                onFormatInputBlur: function(target) {
+                    // no-op: the dropdown's displayed selection is already
+                    // derived live from the text input via getSelectedFormatPreset
                 },
                 openContextMenu: function(event, video){
                     this.selectedTid = video.tid;

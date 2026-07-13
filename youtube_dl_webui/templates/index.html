@@ -153,9 +153,21 @@
                         <div class="form-row">
                             <label>Log Size</label><input type="text" ref="log-size" v-model="modalData.preference.general.log_size" @keyup.esc="showModal = false"/>
                         </div>
-                        <div class="form-section">yt-dlp options</div>
                         <div class="form-row">
-                            <label>Format</label><input type="text" ref="format" v-model="modalData.preference.youtube_dl.format" @keyup.esc="showModal = false"/>
+                            <label>About Custom HTML</label><textarea ref="about-custom-html" v-model="modalData.preference.general.about_custom_html" @keyup.esc="showModal = false" placeholder="Extra HTML shown at the bottom of the About modal"></textarea>
+                        </div>
+                        <div class="form-section">yt-dlp options</div>
+                        <div class="form-row format-row">
+                            <label>Format</label>
+                            <div class="format-picker">
+                                <select :value="getSelectedFormatPreset('preference')" @change="selectFormatPreset($event.target.value, 'preference')">
+                                    <option value="">Select a preset…</option>
+                                    <option v-for="p in getFormatPresets('preference')" :key="p.value" :value="p.value">{{"{{p.label}}"}}</option>
+                                </select>
+                                <button type="button" class="btn btn-sm" @click="clearFormat('preference')">Clear</button>
+                            </div>
+                            <input type="text" ref="format" v-model="modalData.preference.youtube_dl.format" @keyup.esc="showModal = false" @blur="onFormatInputBlur('preference')" placeholder="Or type a custom yt-dlp format selector…"/>
+                            <p class="hint">Preferred format — yt-dlp will select the best available match.</p>
                         </div>
                         <div class="form-row">
                             <label>Proxy</label><input type="text" ref="proxy" v-model="modalData.preference.youtube_dl.proxy" placeholder="e.g. socks5://127.0.0.1:1080" @keyup.esc="showModal = false"/>
@@ -179,7 +191,7 @@
                             <span class="caption">Version:</span><span>{{ version }}</span>
                         </div>
                         <div class="form-row">
-                            <span class="caption">GitHub:</span><a href="https://github.com/d0u9/youtube-dl-webui" target="_blank" rel="noopener">github.com/d0u9/youtube-dl-webui</a>
+                            <span class="caption">GitHub:</span><a href="https://github.com/sarangtc/youtube-dl-webui" target="_blank" rel="noopener">github.com/sarangtc/youtube-dl-webui</a>
                         </div>
                         <div class="form-row">
                             <a class="caption" href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp:</a>
@@ -199,6 +211,7 @@
                         <div class="form-row">
                             <span class="caption">License:</span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html" target="_blank" rel="noopener">GPL-2.0</a>
                         </div>
+                        <div v-if="aboutCustomHtml" class="about-custom-html" v-html="aboutCustomHtml"></div>
                     </div>
                     <div slot="footer">
                         <button class="btn btn-primary" @click="showModal = false">OK</button>
@@ -222,14 +235,17 @@
                         <div class="form-row">
                             <label>URL</label><input type="text" ref="url" v-model="modalData.add.url" placeholder="https://…" @keyup.enter="addTask" @keyup.esc="showModal = false"/>
                         </div>
-                        <div class="form-row">
-                            <label>Quality</label>
-                            <select v-model="modalData.add.preset">
-                                <option v-for="p in formatPresets" :value="p.value">{{"{{p.label}}"}}</option>
-                            </select>
-                        </div>
-                        <div class="form-row" v-if="modalData.add.preset === 'custom'">
-                            <label>Format</label><input type="text" ref="format" v-model="modalData.add.customFormat" placeholder="yt-dlp format selector, e.g. bv*+ba/b" @keyup.enter="addTask" @keyup.esc="showModal = false"/>
+                        <div class="form-row format-row">
+                            <label>Format</label>
+                            <div class="format-picker">
+                                <select :value="getSelectedFormatPreset('add')" @change="selectFormatPreset($event.target.value, 'add')">
+                                    <option value="">Select a preset…</option>
+                                    <option v-for="p in getFormatPresets('add')" :key="p.value" :value="p.value">{{"{{p.label}}"}}</option>
+                                </select>
+                                <button type="button" class="btn btn-sm" @click="clearFormat('add')">Clear</button>
+                            </div>
+                            <input type="text" ref="format" v-model="modalData.add.ydl_opts.format" @keyup.enter="addTask" @keyup.esc="showModal = false" @blur="onFormatInputBlur('add')" placeholder="Or type a custom yt-dlp format selector…"/>
+                            <p class="hint">Preferred format — yt-dlp will select the best available match.</p>
                         </div>
                     </div>
                     <div slot="footer">
@@ -279,7 +295,7 @@
                                 </div>
                                 <div class="row auto-height">
                                     <span class="key">Thumbnail:</span>
-                                    <span class="val thumb"><img v-if="taskDetails.thumbnail" :src="taskDetails.thumbnail" alt="thumbnail"></span>
+                                    <span class="val thumb"><img v-if="taskDetails.thumbnail" :src="thumbnailSrc(taskDetails)" alt="thumbnail"></span>
                                 </div>
                             </div>
                             <div class="col">

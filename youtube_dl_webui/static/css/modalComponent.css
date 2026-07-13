@@ -113,7 +113,8 @@
 }
 
 .modal-body input,
-.modal-body select {
+.modal-body select,
+.modal-body textarea {
     font-size: 13px;
     font-family: inherit;
     display: block;
@@ -126,15 +127,57 @@
     transition: border-color .15s ease, box-shadow .15s ease;
 }
 
+.modal-body textarea {
+    min-height: 60px;
+    resize: vertical;
+}
+
 .modal-body input:focus,
-.modal-body select:focus {
+.modal-body select:focus,
+.modal-body textarea:focus {
     outline: none;
     border-color: var(--primary, #2563eb);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
 }
 
-.modal-body input::placeholder {
+.modal-body input::placeholder,
+.modal-body textarea::placeholder {
     color: #94a3b8;
+}
+
+/* format picker rows (Preferences + Add Task): label above a
+   dropdown+Clear row, with a free-text override input beneath it */
+.modal-body .form-row.format-row {
+    display: block;
+}
+
+.modal-body .form-row.format-row > label {
+    display: block;
+    max-width: none;
+    margin-bottom: 6px;
+}
+
+.modal-body .format-picker {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.modal-body .format-picker select {
+    flex: 1;
+}
+
+.modal-body .form-row.format-row p.hint {
+    text-align: left;
+    margin: 6px 0 0 0;
+}
+
+.modal-body .about-custom-html {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+    font-size: 13px;
+    color: var(--text, #1e293b);
 }
 
 .modal-footer {

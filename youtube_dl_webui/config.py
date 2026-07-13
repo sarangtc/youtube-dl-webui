@@ -96,6 +96,7 @@ class gen_conf(conf_base):
             ('download_dir',    '~/Downloads/youtube-dl',   'string',   '',                 expanduser),
             ('db_path',         '~/.conf/ydl_webui.db',     'string',   '',                 expanduser),
             ('log_size',        10,                         'int',      '',                 None),
+            ('about_custom_html', '',                       'string',   '',                 None),
         ]
 
     def __init__(self, conf_dict={}):
@@ -104,12 +105,45 @@ class gen_conf(conf_base):
         super(gen_conf, self).__init__(self._valid_fields, conf_dict)
 
 
+# shown out of the box so the format picker isn't empty on a fresh install;
+# fully overridable via the 'format_options' key in the config file
+DEFAULT_FORMAT_OPTIONS = [
+        { 'label': 'Best Quality',                    'value': 'best' },
+        { 'label': 'Best Quality MP4',                'value': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best' },
+        { 'label': '1080p MP4',                        'value': 'bestvideo[ext=mp4][height<=?1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=?1080]/best' },
+        { 'label': '720p MP4',                         'value': 'best[height<=720][ext=mp4]/best[height<=720]/best' },
+        { 'label': '480p MP4',                         'value': 'best[height<=480][ext=mp4]/best[height<=480]/best' },
+        { 'label': 'Best Audio Only',                  'value': 'bestaudio[ext=m4a]/bestaudio' },
+        { 'label': 'Audio Only (MP3)',                 'value': 'bestaudio[ext=mp3]/bestaudio' },
+        { 'label': 'Custom format',                    'value': '__CUSTOM__' },
+    ]
+
+
+class format_options_conf(conf_base):
+    _valid_fields = [
+            #(key,              default_val,                type,       validate_regex,     call_function)
+            # deepcopy: DEFAULT_FORMAT_OPTIONS is a mutable list shared across
+            # every instance that doesn't override it; copy it out so nothing
+            # can alias/corrupt the module-level default
+            ('format_options',  DEFAULT_FORMAT_OPTIONS,    'list',     None,               deepcopy),
+        ]
+
+    def __init__(self, conf_dict={}):
+        self.logger = logging.getLogger('ydl_webui')
+        # allow the config file to specify format_options as a bare array
+        # instead of {"format_options": [...]}
+        if isinstance(conf_dict, list):
+            conf_dict = {'format_options': conf_dict}
+        super(format_options_conf, self).__init__(self._valid_fields, conf_dict)
+
+
 class conf(object):
-    _valid_fields = set(('youtube_dl', 'server', 'general'))
+    _valid_fields = set(('youtube_dl', 'server', 'general', 'format_options'))
 
     ydl_conf = None
     svr_conf = None
     gen_conf = None
+    format_options_conf = None
 
     def __init__(self, conf_file, conf_dict={}, cmd_args={}):
         self.logger = logging.getLogger('ydl_webui')
@@ -151,6 +185,8 @@ class conf(object):
                 self.svr_conf = svr_conf(conf_dict.get(f, {}))
             elif f == 'general':
                 self.gen_conf = gen_conf(conf_dict.get(f, {}))
+            elif f == 'format_options':
+                self.format_options_conf = format_options_conf(conf_dict.get(f, {}))
 
         # override configurations by cmdline arguments
         self.cmd_args_override()
@@ -182,6 +218,8 @@ class conf(object):
                 d[f] = self.svr_conf.dict()
             elif f == 'general':
                 d[f] = self.gen_conf.dict()
+            elif f == 'format_options':
+                d[f] = self.format_options_conf.dict()
 
         return d
 
@@ -195,6 +233,8 @@ class conf(object):
             return self.svr_conf
         elif key == 'general':
             return self.gen_conf
+        elif key == 'format_options':
+            return self.format_options_conf
         else:
             raise KeyError(key)
 
