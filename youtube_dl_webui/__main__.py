@@ -8,6 +8,7 @@ import os
 import os.path
 import json
 import logging.config
+import multiprocessing
 import tempfile
 
 if __package__ is None and not hasattr(sys, 'frozen'):
@@ -34,6 +35,11 @@ if __name__ == '__main__':
     # (the CWD at this point) is owned by root
     os.chdir(tempfile.gettempdir())
     logging.config.dictConfig(logging_conf)
+
+    # Python 3.14+ defaults to forkserver on Linux, whose children don't inherit
+    # the logging config above; keep fork so worker/server logs still appear
+    if 'fork' in multiprocessing.get_all_start_methods():
+        multiprocessing.set_start_method('fork')
 
     youtube_dl_webui.main()
 

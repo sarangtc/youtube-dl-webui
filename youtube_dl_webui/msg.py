@@ -44,12 +44,13 @@ class CliMsg(MsgBase):
         return raw_msg['__data__']
 
 class MsgMgr(object):
-    _svrQ = Queue()
-    _cli_dict = {}
-    _evnt_cb_dict = {}
 
     def __init__(self):
-        pass
+        # created here rather than at import time: making a Queue fixes the
+        # multiprocessing start method, which __main__ needs to set first
+        self._svrQ = Queue()
+        self._cli_dict = {}
+        self._evnt_cb_dict = {}
 
     def new_cli(self, cli_name=None):
         uuid = None

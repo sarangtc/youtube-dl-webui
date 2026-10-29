@@ -5,7 +5,7 @@
 # directory, e.g.:
 #   docker build -f dockerfile/Dockerfile -t youtube-dl-webui .
 # See docker-compose.yml at the repo root for the recommended way to run it.
-FROM python:3.11-slim
+FROM python:3.15-slim
 
 # yt-dlp needs a JavaScript runtime (Deno by default) to solve YouTube's
 # player challenges; without it some formats are missing.
