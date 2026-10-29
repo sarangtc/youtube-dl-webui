@@ -21,7 +21,12 @@ var videoDownload = (function (Vue, extendAM){
                 general: { download_dir: '', db_path: '', log_size: '', max_concurrent: '', about_custom_html: '' }
             },
         },
+        // selectedTids is the multi-selection the toolbar acts on;
+        // selectedTid is the focused row shown in the details pane and
+        // anchorTid is where a shift-click range starts from
+        selectedTids: [],
         selectedTid: null,
+        anchorTid: null,
         taskDetails: {},
         contextMenu: { visible: false, x: 0, y: 0 },
         ydl: { installed: '', latest: '', updateAvailable: false, checking: false, updating: false },
@@ -51,11 +56,26 @@ var videoDownload = (function (Vue, extendAM){
                     }
                     return null;
                 },
+                selectedTasks: function() {
+                    var tids = this.selectedTids;
+                    return this.videoList.filter(function(v) {
+                        return tids.indexOf(v.tid) !== -1;
+                    });
+                },
                 hasSelection: function() {
-                    return this.selectedTask !== null;
+                    return this.selectedTasks.length > 0;
+                },
+                allSelected: function() {
+                    return this.videoList.length > 0 && this.selectedTasks.length === this.videoList.length;
+                },
+                someSelected: function() {
+                    return this.hasSelection && !this.allSelected;
+                },
+                finishedSelection: function() {
+                    return this.selectedTasks.filter(function(v) { return v.state === 'finished'; });
                 },
                 canDownload: function() {
-                    return this.selectedTask !== null && this.selectedTask.state === 'finished';
+                    return this.finishedSelection.length > 0;
                 }
             },
             mounted: function () {
@@ -67,7 +87,16 @@ var videoDownload = (function (Vue, extendAM){
                 var _self = this;
                 document.addEventListener('click', function(){ _self.closeContextMenu(); });
                 document.addEventListener('keydown', function(e){
-                    if (e.key === 'Escape') _self.closeContextMenu();
+                    var tag = (e.target && e.target.tagName) || '';
+                    var typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+                    if (e.key === 'Escape') {
+                        if (!_self.contextMenu.visible && !_self.showModal && !typing) _self.clearSelection();
+                        _self.closeContextMenu();
+                    } else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)
+                               && !_self.showModal && !typing) {
+                        e.preventDefault();
+                        _self.selectAll();
+                    }
                 });
                 window.addEventListener('resize', function(){ _self.closeContextMenu(); });
                 window.addEventListener('scroll', function(){ _self.closeContextMenu(); }, true);
@@ -169,62 +198,58 @@ var videoDownload = (function (Vue, extendAM){
                         _self.showAlertToast(_self.errText(err), 'error');
                     });
                 },
-                removeTask: function(removeFile){
+                // run pause/resume/delete over every selected task through
+                // /task/batch; the core reports per-task failures as
+                // detail: [[tid, errmsg], ...] rather than failing the lot
+                batchAction: function(act, extra, verb, onDone){
                     var _self = this;
-                    if (!_self.hasSelection) { _self.showModal = false; return; }
-                    var url = _self.headPath + 'task/tid/' + _self.selectedTask.tid;
-                    if (removeFile) {
-                        url += '?del_file=true';
-                    }
-                    Vue.http.delete(url).then(function(res){
+                    var tids = _self.selectedTasks.map(function(v) { return v.tid; });
+                    if (tids.length === 0) return;
+                    var body = {tids: tids};
+                    for (var k in extra) body[k] = extra[k];
+
+                    Vue.http.post(_self.headPath + 'task/batch/' + act, body, {emulateJSON: false}).then(function(res){
                         var ret = _self.parseResponse(res);
                         if (ret.status === 'error') {
-                            _self.showAlertToast(ret.errmsg || 'Could not remove task', 'error');
+                            _self.showAlertToast(ret.errmsg || 'Request failed', 'error');
                             return;
                         }
-                        _self.showModal = false;
-                        _self.selectedTid = null;
-                        _self.taskDetails = {};
-                        _self.showAlertToast(removeFile ? 'Task and file removed' : 'Task removed', 'success');
+                        var errors = ret.detail || [];
+                        var ok = tids.length - errors.length;
+                        var noun = function(n) { return n === 1 ? 'Task' : n + ' tasks'; };
+                        if (ok === 0) {
+                            _self.showAlertToast(errors[0][1] || 'Could not ' + act + ' task', 'error');
+                        } else if (errors.length) {
+                            _self.showAlertToast(noun(ok) + ' ' + verb + ', ' + errors.length +
+                                                 ' skipped (' + errors[0][1] + ')', 'warning');
+                        } else {
+                            _self.showAlertToast(noun(ok) + ' ' + verb, act === 'delete' ? 'success' : 'info');
+                        }
+                        if (onDone) onDone(ok);
                         that.getTaskList();
                     }, function(err){
                         _self.showAlertToast(_self.errText(err), 'error');
+                    });
+                },
+                removeTask: function(removeFile){
+                    var _self = this;
+                    if (!_self.hasSelection) { _self.showModal = false; return; }
+                    _self.batchAction('delete', {del_file: !!removeFile},
+                                      removeFile ? 'removed with file' : 'removed', function(){
+                        _self.showModal = false;
+                        _self.clearSelection();
                     });
                 },
                 removeData: function(){
                     this.removeTask(true);
                 },
                 pauseTask: function(){
-                    var _self = this;
-                    if (!_self.requireSelection()) return;
-                    var url = _self.headPath + 'task/tid/' + _self.selectedTask.tid + '?act=pause';
-                    Vue.http.put(url).then(function(res){
-                        var ret = _self.parseResponse(res);
-                        if (ret.status === 'error') {
-                            _self.showAlertToast(ret.errmsg || 'Could not pause task', 'error');
-                            return;
-                        }
-                        _self.showAlertToast('Task paused', 'info');
-                        that.getTaskList();
-                    }, function(err){
-                        _self.showAlertToast(_self.errText(err), 'error');
-                    });
+                    if (!this.requireSelection()) return;
+                    this.batchAction('pause', {}, 'paused');
                 },
                 resumeTask: function(){
-                    var _self = this;
-                    if (!_self.requireSelection()) return;
-                    var url = _self.headPath + 'task/tid/' + _self.selectedTask.tid + '?act=resume';
-                    Vue.http.put(url).then(function(res){
-                        var ret = _self.parseResponse(res);
-                        if (ret.status === 'error') {
-                            _self.showAlertToast(ret.errmsg || 'Could not resume task', 'error');
-                            return;
-                        }
-                        _self.showAlertToast('Task resumed', 'info');
-                        that.getTaskList();
-                    }, function(err){
-                        _self.showAlertToast(_self.errText(err), 'error');
-                    });
+                    if (!this.requireSelection()) return;
+                    this.batchAction('resume', {}, 'resumed');
                 },
                 thumbnailSrc: function(detail){
                     // proxied through the server -- the browser using this UI
@@ -233,11 +258,31 @@ var videoDownload = (function (Vue, extendAM){
                 },
                 downloadFile: function(){
                     if (!this.requireSelection()) return;
-                    if (this.selectedTask.state !== 'finished') {
-                        this.showAlertToast('Task is not finished yet', 'warning');
+                    var tasks = this.finishedSelection;
+                    if (tasks.length === 0) {
+                        this.showAlertToast(this.selectedTasks.length === 1
+                            ? 'Task is not finished yet' : 'None of the selected tasks are finished', 'warning');
                         return;
                     }
-                    window.open(this.headPath + 'download/' + this.selectedTask.tid, '_blank');
+                    if (tasks.length < this.selectedTasks.length) {
+                        this.showAlertToast('Downloading ' + tasks.length + ' finished of ' +
+                                            this.selectedTasks.length + ' selected', 'info');
+                    }
+                    // a same-origin <a download> starts a download without
+                    // opening a tab, so it isn't caught by popup blockers;
+                    // spacing them out stops browsers dropping rapid repeats
+                    var headPath = this.headPath;
+                    tasks.forEach(function(task, i) {
+                        setTimeout(function() {
+                            var a = document.createElement('a');
+                            a.href = headPath + 'download/' + task.tid;
+                            a.setAttribute('download', '');
+                            a.style.display = 'none';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }, i * 400);
+                    });
                 },
                 about: function() {
                     this.showModal = true;
@@ -310,9 +355,64 @@ var videoDownload = (function (Vue, extendAM){
                         if (!silent) _self.showAlertToast(_self.errText(err), 'error');
                     });
                 },
-                selected: function(video){
-                    this.selectedTid = video.tid;
-                    this.getTaskInfoById();
+                isSelected: function(tid){
+                    return this.selectedTids.indexOf(tid) !== -1;
+                },
+                focusTask: function(tid){
+                    if (this.selectedTid === tid) return;
+                    this.selectedTid = tid;
+                    this.taskDetails = {};
+                    if (tid !== null) this.getTaskInfoById();
+                },
+                // plain click selects one row, ctrl/cmd-click toggles a row,
+                // shift-click selects the range from the anchor row
+                selected: function(video, event){
+                    event = event || {};
+                    if (event.shiftKey && this.anchorTid !== null) {
+                        var tids = this.videoList.map(function(v) { return v.tid; });
+                        var from = tids.indexOf(this.anchorTid), to = tids.indexOf(video.tid);
+                        if (from !== -1) {
+                            this.selectedTids = tids.slice(Math.min(from, to), Math.max(from, to) + 1);
+                            this.focusTask(video.tid);
+                            return;
+                        }
+                    }
+                    if (event.ctrlKey || event.metaKey) {
+                        this.toggleRow(video);
+                        return;
+                    }
+                    this.selectedTids = [video.tid];
+                    this.anchorTid = video.tid;
+                    this.focusTask(video.tid);
+                },
+                toggleRow: function(video){
+                    var i = this.selectedTids.indexOf(video.tid);
+                    if (i === -1) {
+                        this.selectedTids.push(video.tid);
+                        this.focusTask(video.tid);
+                    } else {
+                        this.selectedTids.splice(i, 1);
+                        if (this.selectedTid === video.tid) {
+                            this.focusTask(this.selectedTids.length ? this.selectedTids[this.selectedTids.length - 1] : null);
+                        }
+                    }
+                    this.anchorTid = video.tid;
+                },
+                toggleAll: function(){
+                    if (this.allSelected) this.clearSelection();
+                    else this.selectAll();
+                },
+                selectAll: function(){
+                    this.selectedTids = this.videoList.map(function(v) { return v.tid; });
+                    if (this.selectedTid === null && this.selectedTids.length) {
+                        this.anchorTid = this.selectedTids[0];
+                        this.focusTask(this.selectedTids[0]);
+                    }
+                },
+                clearSelection: function(){
+                    this.selectedTids = [];
+                    this.anchorTid = null;
+                    this.focusTask(null);
                 },
                 // -- format preset picker: shared by the Preferences and Add
                 // Task modals ('preference' / 'add') --
@@ -362,8 +462,13 @@ var videoDownload = (function (Vue, extendAM){
                     // derived live from the text input via getSelectedFormatPreset
                 },
                 openContextMenu: function(event, video){
-                    this.selectedTid = video.tid;
-                    this.getTaskInfoById();
+                    // right-clicking inside the selection acts on all of it;
+                    // right-clicking elsewhere selects just that row
+                    if (this.isSelected(video.tid)) {
+                        this.focusTask(video.tid);
+                    } else {
+                        this.selected(video);
+                    }
 
                     this.contextMenu.x = event.clientX;
                     this.contextMenu.y = event.clientY;
@@ -531,7 +636,17 @@ var videoDownload = (function (Vue, extendAM){
                                               that.tasksData.stateCounter.paused +
                                               that.tasksData.stateCounter.invalid;
 
-            // drop the selection if the task vanished (e.g. deleted elsewhere)
+            // keep the multi-selection to rows that are actually listed, so a
+            // batch action never touches tasks hidden by the filter (or
+            // deleted elsewhere)
+            var listed = {};
+            resData.detail.forEach(function(v) { listed[v.tid] = true; });
+            var kept = that.tasksData.selectedTids.filter(function(tid) { return listed[tid]; });
+            if (kept.length !== that.tasksData.selectedTids.length) {
+                that.tasksData.selectedTids = kept;
+            }
+
+            // drop the focused task if it vanished (e.g. deleted elsewhere)
             if (that.tasksData.selectedTid !== null) {
                 var found = resData.detail.some(function(v) {
                     return v.tid === that.tasksData.selectedTid;

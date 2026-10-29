@@ -49,18 +49,22 @@
                     <button class="btn btn-primary" @click="showAddTaskModal" title="Add a new download task">
                         <i class="fa fa-plus" aria-hidden="true"></i> Add
                     </button>
-                    <button class="btn" @click="showRemoveTaskModal" :disabled="!hasSelection" title="Remove the selected task">
+                    <button class="btn" @click="showRemoveTaskModal" :disabled="!hasSelection" title="Remove the selected tasks">
                         <i class="fa fa-trash-o" aria-hidden="true"></i> Remove
                     </button>
-                    <button class="btn" @click="pauseTask" :disabled="!hasSelection" title="Pause the selected task">
+                    <button class="btn" @click="pauseTask" :disabled="!hasSelection" title="Pause the selected tasks">
                         <i class="fa fa-pause" aria-hidden="true"></i> Pause
                     </button>
-                    <button class="btn" @click="resumeTask" :disabled="!hasSelection" title="Resume the selected task">
+                    <button class="btn" @click="resumeTask" :disabled="!hasSelection" title="Resume the selected tasks">
                         <i class="fa fa-play" aria-hidden="true"></i> Resume
                     </button>
-                    <button class="btn" @click="downloadFile" :disabled="!canDownload" title="Download the finished file">
+                    <button class="btn" @click="downloadFile" :disabled="!canDownload" title="Download the finished files">
                         <i class="fa fa-download" aria-hidden="true"></i> File
                     </button>
+                    <span v-if="selectedTasks.length > 1" class="selection-count" v-cloak>
+                        {{"{{selectedTasks.length}}"}} selected
+                        <a href="#" @click.prevent="clearSelection" title="Clear selection (Esc)">&times;</a>
+                    </span>
                     <span class="spacer"></span>
                     <button class="btn" @click="preference" title="Preferences">
                         <i class="fa fa-cog" aria-hidden="true"></i> Preferences
@@ -102,6 +106,9 @@
                     <table class="videoList">
                         <thead>
                             <tr>
+                                <th width="32px" class="select-cell">
+                                    <input type="checkbox" :checked="allSelected" :indeterminate.prop="someSelected" :disabled="videoList.length === 0" @change="toggleAll" title="Select all (Ctrl+A)">
+                                </th>
                                 <th width="36px">#</th>
                                 <th width="44px">State</th>
                                 <th>Name</th>
@@ -113,12 +120,15 @@
                         </thead>
                         <tbody>
                             <tr v-if="videoList.length === 0" v-cloak>
-                                <td colspan="7" class="empty-state">
+                                <td colspan="8" class="empty-state">
                                     <i class="fa fa-inbox" aria-hidden="true"></i>
                                     <p>No tasks here yet. Click <strong>Add</strong> to start a download.</p>
                                 </td>
                             </tr>
-                            <tr v-for="(video, index) in videoList" :key="video.tid" @click="selected(video)" @contextmenu.prevent="openContextMenu($event, video)" :class="{'selected': selectedTid === video.tid}">
+                            <tr v-for="(video, index) in videoList" :key="video.tid" @click="selected(video, $event)" @mousedown.shift.prevent @contextmenu.prevent="openContextMenu($event, video)" :class="{'selected': isSelected(video.tid), 'focused': selectedTid === video.tid}">
+                                <td v-cloak class="select-cell" @click.stop="toggleRow(video)">
+                                    <input type="checkbox" :checked="isSelected(video.tid)" @click.stop="toggleRow(video)">
+                                </td>
                                 <td v-cloak>{{"{{index + 1}}"}}</td>
                                 <td v-cloak class="state-cell">
                                     <i v-bind:class="['fa', stateIcon(video.state).icon, stateIcon(video.state).cls]" aria-hidden="true"></i>
@@ -221,9 +231,10 @@
                     </div>
                 </template>
                 <template v-if="modalType === 'removeTask'">
-                    <div slot="header">Remove Task</div>
+                    <div slot="header">{{"{{selectedTasks.length > 1 ? 'Remove Tasks' : 'Remove Task'}}"}}</div>
                     <div slot="body" v-cloak style="display:block">
-                        <p>Remove <strong>{{"{{selectedTask ? (selectedTask.title || selectedTask.url) : 'this task'}}"}}</strong>?</p>
+                        <p v-if="selectedTasks.length > 1">Remove <strong>{{"{{selectedTasks.length}}"}} tasks</strong>?</p>
+                        <p v-else>Remove <strong>{{"{{selectedTasks.length ? (selectedTasks[0].title || selectedTasks[0].url) : 'this task'}}"}}</strong>?</p>
                         <p class="hint">“Remove with file” also deletes the downloaded file from disk.</p>
                     </div>
                     <div slot="footer">
@@ -274,7 +285,7 @@
                     </ul>
                 </div>
                 <div class="tabpane">
-                    <div v-if="!hasSelection" class="tab-empty" v-cloak>Select a task to see its details.</div>
+                    <div v-if="!selectedTask" class="tab-empty" v-cloak>Select a task to see its details.</div>
                     <template v-else>
                     <div v-show="showTab === 'Status'" v-cloak>
                         <dl>
