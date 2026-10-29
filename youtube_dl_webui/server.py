@@ -255,7 +255,7 @@ def ydl_update():
 
     try:
         proc = subprocess.run(
-            [sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp'],
+            [sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'],
             capture_output=True, text=True, timeout=180)
     except subprocess.TimeoutExpired:
         return json.dumps({'status': 'error', 'errmsg': 'Update timed out'})

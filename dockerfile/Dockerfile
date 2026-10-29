@@ -7,6 +7,10 @@
 # See docker-compose.yml at the repo root for the recommended way to run it.
 FROM python:3.11-slim
 
+# yt-dlp needs a JavaScript runtime (Deno by default) to solve YouTube's
+# player challenges; without it some formats are missing.
+COPY --from=denoland/deno:bin-2.5.6 /deno /usr/local/bin/deno
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg gosu ca-certificates \
     && rm -rf /var/lib/apt/lists/*

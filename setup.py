@@ -28,7 +28,7 @@ setup (
         zip_safe=False,
         install_requires=[
             'Flask>=1.0',
-            'yt-dlp',
+            'yt-dlp[default]',
         ],
         entry_points={
             'console_scripts': [

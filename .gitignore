@@ -90,3 +90,4 @@ ENV/
 
 # Other file types
 *.swp
+data/youtube_dl_webui.db
