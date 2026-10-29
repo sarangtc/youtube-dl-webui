@@ -69,3 +69,16 @@ Major stability and UI/UX overhaul.
   /thumbnail/{tid}`) instead of being loaded directly by the browser, so the
   UI works when the browser has no direct internet access but the server
   does (e.g. an intranet-only deployment).
+
+## Unreleased
+
+- Playlist support: adding a YouTube playlist URL creates one task per
+  video, skipping videos already in the list. At most
+  `general.max_concurrent` (default 3) download at once; the rest wait as
+  paused tasks and start as slots free up. `POST /task` returns
+  `tids`/`added`/`skipped` for playlists.
+- Multi-row selection in the task list: a checkbox column, Ctrl/Cmd+click,
+  Shift+click ranges, Ctrl+A and Esc. Pause, Resume, Remove, Remove with
+  file and File (download) in the toolbar and right-click menu now act on
+  every selected task, using the existing `/task/batch/*` endpoints, and
+  report partial failures in a toast.

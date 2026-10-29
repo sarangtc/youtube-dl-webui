@@ -18,14 +18,21 @@ to users who prefer graphical interfaces over command-line tools.
 
 ### Core Functionality
 - **Task Management**: Add, remove, pause, and resume download tasks
+- **Playlist Support**: Paste a YouTube playlist URL to queue every video in it as its
+  own task, with a configurable number downloading at once (see [Playlists](#playlists))
+- **Batch Actions**: Select multiple tasks and pause, resume, download, or remove them
+  all at once (see [Selecting Multiple Tasks](#selecting-multiple-tasks))
 - **Real-time Progress**: Live progress tracking with download speed and ETA
 - **Multiple Format Support**: Pre-configured format presets and custom format options
 - **File Download**: Direct download of completed files through the web interface
 
 ### User Interface
 - **Modern Design**: Clean, responsive interface with Vue.js
+- **Multi-row Selection**: Checkboxes, Ctrl/Cmd+click, Shift+click ranges, and Ctrl+A
+  to select several tasks; every toolbar and context-menu action applies to the whole selection
 - **Right-click Context Menu**: Right-click any task for quick access to Pause, Resume,
-  Download, and Remove without selecting it first
+  Download, and Remove without selecting it first; right-clicking inside a multi-row
+  selection acts on all selected tasks
 - **Task Filtering**: Filter tasks by status (All, Downloading, Finished, Paused, Invalid)
 - **Detailed Information**: View comprehensive task details including thumbnails, descriptions, and logs.
   Thumbnails are proxied through the server rather than loaded directly by the browser (see
@@ -175,9 +182,26 @@ This HTML will be displayed in the About modal below the standard application in
 
 ### Playlists
 
-Adding a YouTube playlist URL (`youtube.com/playlist?list=...`) creates one task per video, so each video gets its own progress, file and retry. Videos already in the task list are skipped. At most `max_concurrent` (default 3) playlist videos download at once; the rest wait as paused tasks and start automatically as slots free up. The wait queue lives in memory, so after a server restart any still-waiting videos stay paused until you resume them.
+Adding a YouTube playlist URL (`youtube.com/playlist?list=...`, including the
+`www.`, `m.` and `music.` hosts) creates one task per video, so each video gets
+its own progress, file and retry. The toast after adding says how many videos
+were queued and how many were skipped.
 
-A `watch?v=...&list=...` URL downloads only that one video.
+- **Duplicates**: videos already in the task list are skipped, so re-adding a
+  playlist only picks up videos that were added to it since.
+- **Concurrency**: at most `general.max_concurrent` (default 3) playlist videos
+  download at once; the rest wait as paused tasks and start automatically as
+  slots free up. Set it in the config file or under **Preferences → Max Concurrent**.
+- **Manual resume jumps the queue**: resuming a waiting video yourself starts
+  it immediately rather than waiting for a free slot.
+- **Restarts**: the wait queue lives in memory, so after a server restart any
+  still-waiting videos stay paused until you resume them. Select them all and
+  click **Resume** to restart them in one go (see
+  [Selecting Multiple Tasks](#selecting-multiple-tasks)).
+- **Format and proxy**: the format chosen in the Add dialog applies to every
+  video in the playlist, and the configured proxy is used when reading the playlist.
+
+A `watch?v=...&list=...` URL downloads only that one video, not the whole playlist.
 
 ## Usage
 
@@ -189,9 +213,9 @@ A `watch?v=...&list=...` URL downloads only that one video.
    youtube-dl-webui -c /path/to/your/config.json
    ```
 3. **Open your browser** and navigate to `http://localhost:5000`
-4. **Add download tasks** using the "Add" button
+4. **Add download tasks** using the "Add" button (a single video or a playlist URL)
 5. **Monitor progress** in the main interface
-6. **Download completed files** using the "Download" button
+6. **Download completed files** using the "File" button
 
 ### Command Line Options
 
@@ -207,14 +231,47 @@ Options:
 
 ### Web Interface
 
-- **Add Task**: Click "Add" to start a new download, optionally picking a quality preset
-- **Remove Task**: Select a task and click "Remove", or right-click it, to delete it
-- **Pause/Resume**: Control active downloads from the toolbar or the right-click menu
-- **Download Files**: Download completed files directly from the browser
+- **Add Task**: Click "Add" to start a new download, optionally picking a quality preset.
+  A playlist URL adds one task per video (see [Playlists](#playlists))
+- **Remove Task**: Select one or more tasks and click "Remove", or right-click, to delete
+  them. Choose "Remove task" to keep the downloaded files or "Remove with file" to
+  delete them from disk too
+- **Pause/Resume**: Control downloads from the toolbar or the right-click menu
+- **Download Files**: Click "File" to download the selected finished tasks' files
 - **Right-click Menu**: Right-click any row in the task list for quick access to
   Pause, Resume, Download, and Remove — no need to select the row first
 - **Preferences**: Configure application settings through the web interface
 - **Filter Tasks**: Use the sidebar to filter tasks by status
+
+### Selecting Multiple Tasks
+
+Every toolbar button and right-click menu item acts on all selected tasks.
+
+| Action | Effect |
+|---|---|
+| Click a row | Select only that row |
+| Ctrl+click (Cmd+click on macOS) or click its checkbox | Add or remove that row |
+| Shift+click | Select every row between the last clicked row and this one |
+| Header checkbox or Ctrl+A | Select all visible rows (click the header checkbox again to clear) |
+| Esc, or the × next to "N selected" | Clear the selection |
+| Right-click a selected row | Open the menu for the whole selection |
+| Right-click an unselected row | Select only that row and open its menu |
+
+Things to know:
+
+- **Only visible rows are selected.** Switching the status filter drops any
+  selected tasks that the new filter hides, so a batch action never touches
+  tasks you can't see. A handy pattern is to filter to *Paused* or *Finished*,
+  press Ctrl+A, then act.
+- **Partial success is normal.** If some selected tasks can't take an action
+  (e.g. pausing a task that's already finished), the rest still go through
+  and a toast reports how many were skipped and why.
+- **Downloading several files** starts one browser download per finished task,
+  a fraction of a second apart; unfinished tasks in the selection are skipped.
+  Chrome and Edge ask once per site to *allow multiple downloads*; accept it
+  or only the first file arrives.
+- The details pane at the bottom shows the most recently clicked task, which
+  is marked with a blue bar on the left of its row.
 
 ### Updating yt-dlp
 
@@ -342,11 +399,19 @@ docker run -d \
 The application provides a REST API for programmatic access:
 
 - `GET /task/list?state={all|downloading|finished|paused|invalid}` - List tasks
-- `POST /task` - Create a new task, body: `{"url": "...", "ydl_opts": {"format": "..."}}`
+- `POST /task` - Create a new task, body: `{"url": "...", "ydl_opts": {"format": "..."}}`.
+  Returns `{"tid": "..."}` for a single video. For a playlist URL it creates one
+  task per video and returns `{"tids": [...], "added": N, "skipped": M}`, where
+  `skipped` counts videos that were already in the task list
 - `DELETE /task/tid/{tid}` - Delete a task
 - `DELETE /task/tid/{tid}?del_file=true` - Delete a task and its downloaded file
 - `PUT /task/tid/{tid}?act=pause` - Pause a task
 - `PUT /task/tid/{tid}?act=resume` - Resume (or retry) a task
+- `POST /task/batch/{pause|resume|delete}` - Apply an action to several tasks,
+  body: `{"tids": ["...", "..."]}`; for `delete`, add `"del_file": true` to also
+  delete the files. The response is `{"status": "success"}` if every task
+  succeeded, otherwise `{"status": "success", "detail": [[tid, errmsg], ...]}`
+  listing only the tasks that failed
 - `GET /task/tid/{tid}/status` - Get full task details, including logs
 - `GET /task/state_counter` - Get the number of tasks in each state
 - `GET /config` - Get the current configuration
@@ -380,6 +445,11 @@ See `REST_API.txt` for the older, partially out-of-date endpoint reference.
    access, update manually instead: `pip install --upgrade yt-dlp` in the
    same environment, then restart the server. See
    [Updating yt-dlp](#updating-yt-dlp) for details.
+7. **Only one file arrives when downloading several**: the browser blocked the
+   extra downloads. Allow multiple automatic downloads for this site (Chrome/Edge
+   show a prompt or an icon in the address bar) and click "File" again.
+8. **Playlist videos stuck as paused after a restart**: the playlist wait queue
+   isn't persisted. Filter to *Paused*, press Ctrl+A and click "Resume".
 
 ### Logs
 

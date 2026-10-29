@@ -4,7 +4,7 @@
 |----+--------+-----------------------------------------------------------------+----------------------------------------------|
 |    | method | url                                                             | description                                  |
 |----+:------:+-----------------------------------------------------------------+----------------------------------------------|
-| 1  |  POST  | /task                                                           | create a new download task                   |
+| 1  |  POST  | /task                                                           | create a task (one per video for a playlist) |
 | 2  |   PUT  | /task/tid/<tid>?act=pause                                       | pause a task with its tid                    |
 | 3  |   PUT  | /task/tid/<tid>?act=resume                                      | resume download                              |
 | 4  | DELETE | /task/tid/<tid>?del_file=true                                   | delete a task and its data                   |
@@ -31,6 +31,33 @@ that if the previous operation is successful or not.
 Valid values for field 'status' are 'success' and 'error'.
 
 When 'error' status occurs, another filed 'errmsg' is included to points out what happened.
+
+POST /task:
+
+    body: {"url": "...", "ydl_opts": {"format": "..."}}
+
+    A single video replies {"status": "success", "tid": "..."}.
+
+    A YouTube playlist URL (youtube.com/playlist?list=..., no 'v' parameter) is
+    expanded by the server into one task per video. Videos already in the task
+    list are skipped:
+
+        {"status": "success", "tids": ["...", ...], "added": N, "skipped": M}
+
+    An empty or unreadable playlist replies 'error' with an 'errmsg'.
+
+POST /task/batch/{pause|resume|delete}:
+
+    body: {"tids": ["...", ...]}            for pause and resume
+          {"tids": [...], "del_file": true} for delete, to also remove the files
+
+    Each tid is processed independently. If all succeed the reply is
+    {"status": "success"}; otherwise 'status' is still 'success' and 'detail'
+    lists the tasks that failed:
+
+        {"status": "success", "detail": [["<tid>", "<errmsg>"], ...]}
+
+    A body without 'tids' replies 'error'.
 
 
 
