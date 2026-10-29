@@ -154,6 +154,9 @@
                             <label>Log Size</label><input type="text" ref="log-size" v-model="modalData.preference.general.log_size" @keyup.esc="showModal = false"/>
                         </div>
                         <div class="form-row">
+                            <label>Max Concurrent</label><input type="text" ref="max-concurrent" v-model="modalData.preference.general.max_concurrent" @keyup.esc="showModal = false" placeholder="Playlist videos downloading at once"/>
+                        </div>
+                        <div class="form-row">
                             <label>About Custom HTML</label><textarea ref="about-custom-html" v-model="modalData.preference.general.about_custom_html" @keyup.esc="showModal = false" placeholder="Extra HTML shown at the bottom of the About modal"></textarea>
                         </div>
                         <div class="form-section">yt-dlp options</div>

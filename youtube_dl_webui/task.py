@@ -123,6 +123,9 @@ class TaskManager(object):
         self.ydl_conf = conf['youtube_dl']
 
         self._tasks_dict = {}
+        # tids waiting for a free download slot (playlist videos); kept in
+        # memory only -- after a restart they are simply left paused
+        self._queue = deque()
 
     def new_task(self, url, ydl_opts={}):
         """Create a new task and put it in inactive type"""
@@ -131,8 +134,31 @@ class TaskManager(object):
         ydl_opts = ydl_conf(ydl_opts)
         return self._db.new_task(url, ydl_opts.dict())
 
+    def enqueue_task(self, tid):
+        """start the task once fewer than max_concurrent are downloading"""
+        self._queue.append(tid)
+        self._start_queued()
+
+    def _start_queued(self):
+        limit = max(1, self._conf['general']['max_concurrent'])
+        while self._queue:
+            active = sum(1 for t in self._tasks_dict.values()
+                         if t.state == state_index['downloading'])
+            if active >= limit:
+                return
+
+            tid = self._queue.popleft()
+            try:
+                self.start_task(tid)
+            except (TaskError, TaskInexistenceError) as e:
+                self.logger.warning('cannot start queued task %s: %s', tid, e)
+
     def start_task(self, tid, ignore_state=False):
         """make an inactive type task into active type"""
+
+        # a manual resume jumps the queue
+        if tid in self._queue:
+            self._queue.remove(tid)
 
         task = None
         if tid in self._tasks_dict:
@@ -173,6 +199,7 @@ class TaskManager(object):
         task.pause()
         self._db.pause_task(tid, pause_time=task.pause_time, elapsed=task.elapsed)
         self._db.update_log(tid, task.log)
+        self._start_queued()
 
     def finish_task(self, tid):
         self.logger.debug('task finished (%s)' %(tid))
@@ -185,6 +212,7 @@ class TaskManager(object):
         self._db.finish_task(tid, finish_time=task.finish_time, elapsed=task.elapsed)
         self._db.update_log(tid, task.log)
         del self._tasks_dict[tid]
+        self._start_queued()
 
     def halt_task(self, tid):
         self.logger.debug('task halted (%s)' %(tid))
@@ -197,14 +225,19 @@ class TaskManager(object):
         self._db.halt_task(tid, halt_time=task.halt_time, elapsed=task.elapsed)
         self._db.update_log(tid, task.log)
         del self._tasks_dict[tid]
+        self._start_queued()
 
     def delete_task(self, tid, del_file=False):
         self.logger.debug('task deleted (%s)' %(tid))
+
+        if tid in self._queue:
+            self._queue.remove(tid)
 
         if tid in self._tasks_dict:
             task = self._tasks_dict[tid]
             del self._tasks_dict[tid]
             task.halt()
+            self._start_queued()
 
         try:
             dl_file = self._db.delete_task(tid)

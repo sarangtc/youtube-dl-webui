@@ -20,6 +20,7 @@ from multiprocessing import Process
 from threading import Lock
 
 from . import __version__
+from .playlist import is_playlist_url, expand_playlist, PlaylistError
 
 MSG = None
 MSG_LOCK = Lock()
@@ -108,7 +109,24 @@ def add_task():
         return json.dumps(MSG_INVALID_REQUEST)
 
     payload['url'] = payload['url'].strip()
-    return json.dumps(msg_request('create', payload))
+    if not is_playlist_url(payload['url']):
+        return json.dumps(msg_request('create', payload))
+
+    # expand here, in this request's thread, rather than in the core: a long
+    # playlist takes a while to page through and the core must keep serving
+    # every other request (and the workers) meanwhile
+    ret = msg_request('config', {'act': 'get'})
+    proxy = ret.get('config', {}).get('youtube_dl', {}).get('proxy')
+    try:
+        urls = expand_playlist(payload['url'], proxy=proxy)
+    except PlaylistError as e:
+        return json.dumps({'status': 'error', 'errmsg': 'Could not read playlist: {}'.format(e.msg)})
+
+    if not urls:
+        return json.dumps({'status': 'error', 'errmsg': 'Playlist is empty'})
+
+    batch = {'urls': urls, 'ydl_opts': payload.get('ydl_opts', {})}
+    return json.dumps(msg_request('create_batch', batch))
 
 
 @app.route('/task/list', methods=['GET'])

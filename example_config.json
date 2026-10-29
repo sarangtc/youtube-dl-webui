@@ -3,6 +3,7 @@
         "download_dir": "/tmp/youtube_dl",
         "db_path": "/tmp/youtube_dl_webui.db",
         "log_size": 10,
+        "max_concurrent": 3,
         "about_custom_html": "<p>Custom information can be added here.</p><p>This supports <strong>HTML</strong> formatting.</p>"
     },
     "server": {

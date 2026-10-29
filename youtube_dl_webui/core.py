@@ -66,6 +66,23 @@ class WebMsgDispatcher(object):
         svr.put({'status': 'success', 'tid': tid})
 
     @classmethod
+    def event_create_batch(cls, svr, event, data, args):
+        """One task per playlist video; the server has already expanded it."""
+        urls, ydl_opts = data.get('urls', []), data.get('ydl_opts', {})
+
+        tids, skipped = [], 0
+        for url in urls:
+            try:
+                tids.append(cls._task_mgr.new_task(url, ydl_opts=ydl_opts))
+            except TaskExistenceError:
+                skipped += 1
+
+        for tid in tids:
+            cls._task_mgr.enqueue_task(tid)
+
+        svr.put({'status': 'success', 'tids': tids, 'added': len(tids), 'skipped': skipped})
+
+    @classmethod
     def event_delete(cls, svr, event, data, args):
         tid, del_file = data['tid'], data['del_file']
 
@@ -272,6 +289,7 @@ class Core(object):
         WorkMsgDispatcher.init(self.task_mgr)
 
         self.msg_mgr.reg_event('create',     WebMsgDispatcher.event_create)
+        self.msg_mgr.reg_event('create_batch', WebMsgDispatcher.event_create_batch)
         self.msg_mgr.reg_event('delete',     WebMsgDispatcher.event_delete)
         self.msg_mgr.reg_event('manipulate', WebMsgDispatcher.event_manipulation)
         self.msg_mgr.reg_event('query',      WebMsgDispatcher.event_query)

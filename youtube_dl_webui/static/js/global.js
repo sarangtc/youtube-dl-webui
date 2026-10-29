@@ -18,7 +18,7 @@ var videoDownload = (function (Vue, extendAM){
             add: { url: '', ydl_opts: { format: '' } },
             preference: {
                 youtube_dl: { format: '', proxy: '', ratelimit: '', outtmpl: '' },
-                general: { download_dir: '', db_path: '', log_size: '', about_custom_html: '' }
+                general: { download_dir: '', db_path: '', log_size: '', max_concurrent: '', about_custom_html: '' }
             },
         },
         selectedTid: null,
@@ -141,7 +141,13 @@ var videoDownload = (function (Vue, extendAM){
                             return;
                         }
                         _self.showModal = false;
-                        _self.showAlertToast('Task added', 'success');
+                        if (ret.tids !== undefined) {
+                            var msg = 'Playlist: ' + ret.added + ' video(s) added';
+                            if (ret.skipped) msg += ', ' + ret.skipped + ' already in the list';
+                            _self.showAlertToast(msg, ret.added ? 'success' : 'warning');
+                        } else {
+                            _self.showAlertToast('Task added', 'success');
+                        }
                         that.getTaskList();
                     }, function(err){
                         _self.showAlertToast(_self.errText(err), 'error');
@@ -289,6 +295,7 @@ var videoDownload = (function (Vue, extendAM){
                         _self.modalData.preference.general.download_dir = config.general.download_dir;
                         _self.modalData.preference.general.db_path = config.general.db_path;
                         _self.modalData.preference.general.log_size = config.general.log_size;
+                        _self.modalData.preference.general.max_concurrent = config.general.max_concurrent;
                         _self.modalData.preference.general.about_custom_html = config.general.about_custom_html || '';
                         _self.modalData.preference.youtube_dl.format = config.youtube_dl.format;
                         _self.modalData.preference.youtube_dl.proxy = config.youtube_dl.proxy;

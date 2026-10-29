@@ -96,6 +96,8 @@ class gen_conf(conf_base):
             ('download_dir',    '~/Downloads/youtube-dl',   'string',   '',                 expanduser),
             ('db_path',         '~/.conf/ydl_webui.db',     'string',   '',                 expanduser),
             ('log_size',        10,                         'int',      '',                 None),
+            # playlist videos beyond this many running downloads wait in a queue
+            ('max_concurrent',  3,                          'int',      '',                 None),
             ('about_custom_html', '',                       'string',   '',                 None),
         ]
 

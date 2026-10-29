@@ -139,6 +139,7 @@ The application loads configuration in this order:
         "download_dir": "/path/to/downloads",
         "db_path": "/path/to/database.db",
         "log_size": 10,
+        "max_concurrent": 3,
         "about_custom_html": "<p>Your custom HTML content here</p>"
     },
     "server": {
@@ -171,6 +172,12 @@ You can add custom HTML content to the About modal by setting the `about_custom_
 ```
 
 This HTML will be displayed in the About modal below the standard application information.
+
+### Playlists
+
+Adding a YouTube playlist URL (`youtube.com/playlist?list=...`) creates one task per video, so each video gets its own progress, file and retry. Videos already in the task list are skipped. At most `max_concurrent` (default 3) playlist videos download at once; the rest wait as paused tasks and start automatically as slots free up. The wait queue lives in memory, so after a server restart any still-waiting videos stay paused until you resume them.
+
+A `watch?v=...&list=...` URL downloads only that one video.
 
 ## Usage
 
