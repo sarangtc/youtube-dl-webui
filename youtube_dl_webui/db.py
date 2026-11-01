@@ -157,7 +157,7 @@ class DataBase(object):
                     }
         self.update(tid, db_data)
 
-    def finish_task(self, tid, elapsed, finish_time=None):
+    def finish_task(self, tid, elapsed, finish_time=None, filename=None):
         self.logger.debug("db finish_task()")
         finish_time = time() if finish_time is None else finish_time
         state = state_index['finished']
@@ -174,6 +174,9 @@ class DataBase(object):
                         },
                         'task_ydl_opt': {'state': state},
                     }
+        if filename:
+            # final path after merging / postprocessing
+            db_data['task_status']['filename'] = filename
         self.update(tid, db_data)
 
     def halt_task(self, tid, elapsed, halt_time=None):

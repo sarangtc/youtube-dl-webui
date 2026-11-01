@@ -197,11 +197,56 @@ def download_file(tid):
     # the server process is started with the download dir as its cwd;
     # send_from_directory rejects paths escaping that directory
     dl_dir = os.getcwd()
-    if not os.path.isfile(os.path.join(dl_dir, filename)):
+    filename = _resolve_download(dl_dir, filename)
+    if filename is None:
         return json.dumps({'status': 'error',
                            'errmsg': 'File not found on disk'}), 404
 
     return send_from_directory(dl_dir, filename, as_attachment=True)
+
+
+def _resolve_download(dl_dir, filename):
+    """Map a task's recorded filename to a path relative to dl_dir, or None.
+
+    Older records may hold an absolute path from wherever the download dir
+    used to be (e.g. '/tmp/youtube_dl/x.mp4'), or an intermediate format
+    file deleted after merging; fall back to matching the basename."""
+    candidates = []
+    if not os.path.isabs(filename):
+        candidates.append(filename)
+    candidates.append(os.path.basename(filename))
+
+    for name in candidates:
+        if os.path.isfile(os.path.join(dl_dir, name)):
+            return name
+    for name in candidates:
+        found = _find_merged_file(dl_dir, name)
+        if found is not None:
+            return found
+    return None
+
+
+def _find_merged_file(dl_dir, filename):
+    """Locate the final file for tasks that recorded an intermediate format
+    file (e.g. 'Title.f140.m4a') which yt-dlp deleted after merging into
+    'Title.mp4' / 'Title.mkv'."""
+    stem = re.sub(r'\.f[\w-]+\.[^.]+$', '', filename)
+    if stem == filename:
+        stem = os.path.splitext(filename)[0]
+
+    sub_dir, base = os.path.split(stem)
+    search_dir = os.path.join(dl_dir, sub_dir)
+    try:
+        entries = os.listdir(search_dir)
+    except OSError:
+        return None
+
+    for entry in entries:
+        name, ext = os.path.splitext(entry)
+        if name == base and ext not in ('.part', '.ytdl', '.temp') \
+                and os.path.isfile(os.path.join(search_dir, entry)):
+            return os.path.join(sub_dir, entry)
+    return None
 
 
 @app.route('/thumbnail/<tid>', methods=['GET'])

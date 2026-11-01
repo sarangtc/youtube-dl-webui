@@ -243,7 +243,7 @@ class WorkMsgDispatcher(object):
     def event_worker_done(cls, svr, event, data, arg):
         tid, data = data['tid'], data['data']
         try:
-            cls._task_mgr.finish_task(tid)
+            cls._task_mgr.finish_task(tid, filename=data.get('filename'))
         except TaskInexistenceError:
             cls.logger.error('Cannot finish, task does not exist')
 

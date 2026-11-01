@@ -201,7 +201,7 @@ class TaskManager(object):
         self._db.update_log(tid, task.log)
         self._start_queued()
 
-    def finish_task(self, tid):
+    def finish_task(self, tid, filename=None):
         self.logger.debug('task finished (%s)' %(tid))
 
         if tid not in self._tasks_dict:
@@ -209,7 +209,8 @@ class TaskManager(object):
 
         task = self._tasks_dict[tid]
         task.finish()
-        self._db.finish_task(tid, finish_time=task.finish_time, elapsed=task.elapsed)
+        self._db.finish_task(tid, finish_time=task.finish_time,
+                             elapsed=task.elapsed, filename=filename)
         self._db.update_log(tid, task.log)
         del self._tasks_dict[tid]
         self._start_queued()

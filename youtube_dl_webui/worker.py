@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
 import re
 import logging
 import json
@@ -112,10 +113,24 @@ class Worker(Process):
         self.first_run = first_run
         self.log_filter = LogFilter(tid, msg_cli)
         self.ydl_hook = YdlHook(tid, msg_cli)
+        self.final_filename = None
+
+    def post_hook(self, filepath):
+        # called once all postprocessing (format merging, audio extraction,
+        # ...) is done; progress hooks only see the intermediate files, which
+        # are deleted after a merge. yt-dlp hands over an absolute path; store
+        # it relative to the download dir (our cwd) so records survive the
+        # download dir being moved or mounted elsewhere
+        cwd = os.getcwd()
+        if os.path.isabs(filepath) and \
+                os.path.commonpath([cwd, os.path.abspath(filepath)]) == cwd:
+            filepath = os.path.relpath(filepath, cwd)
+        self.final_filename = filepath
 
     def intercept_ydl_opts(self):
         self.ydl_opts['logger'] = self.log_filter
         self.ydl_opts['progress_hooks'] = [self.ydl_hook.dispatcher]
+        self.ydl_opts['post_hooks'] = [self.post_hook]
         self.ydl_opts['noplaylist'] = True
         self.ydl_opts['progress_with_newline'] = True
         # resume partially downloaded files instead of restarting
@@ -151,7 +166,8 @@ class Worker(Process):
             event_handler.download_error('unexpected error: %s' %(str(e)))
             return
 
-        self.msg_cli.put('worker_done', {'tid': self.tid, 'data': {}})
+        data = {'filename': self.final_filename} if self.final_filename else {}
+        self.msg_cli.put('worker_done', {'tid': self.tid, 'data': data})
 
     def stop(self):
         self.logger.info('Terminating Process ...')
